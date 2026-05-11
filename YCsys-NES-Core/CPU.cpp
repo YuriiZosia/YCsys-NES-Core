@@ -19,3 +19,17 @@ void CPU6502::write(uint16_t addr, uint8_t data) {
         bus->write(addr, data);
     }
 }
+
+uint8_t CPU6502::GetFlag(FLAGS6502 f) {
+    // Якщо біт за маскою 'f' встановлений, повертаємо 1, інакше 0
+    return ((status & f) > 0) ? 1 : 0;
+}
+
+void CPU6502::SetFlag(FLAGS6502 f, bool v) {
+    if (v) {
+        status |= f;    // Встановлюємо біт (OR)
+    }
+    else {
+        status &= ~f;   // Скидаємо біт (AND з інверсією)
+    }
+}
