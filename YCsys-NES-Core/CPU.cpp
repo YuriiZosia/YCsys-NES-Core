@@ -33,3 +33,41 @@ void CPU6502::SetFlag(FLAGS6502 f, bool v) {
         status &= ~f;   // Скидаємо біт (AND з інверсією)
     }
 }
+
+// Створюємо заглужки- заготовки для режимів адресації, щоб код компілювався
+uint8_t CPU6502::IMP() {
+    return 0;
+}
+uint8_t CPU6502::IMM() {
+    return 0;
+}
+uint8_t CPU6502::ZP0() {
+    return 0;
+}
+uint8_t CPU6502::ZPX() {
+    return 0;
+}
+uint8_t CPU6502::ZPY() {
+    return 0;
+}
+uint8_t CPU6502::REL() {
+    return 0;
+}
+uint8_t CPU6502::ABS() {
+    return 0;
+}
+uint8_t CPU6502::ABX() {
+    return 0;
+}
+uint8_t CPU6502::ABY() {
+    return 0;
+}
+uint8_t CPU6502::IND() {
+    return 0;
+}
+uint8_t CPU6502::IZX() {
+    return 0;
+}
+uint8_t CPU6502::IZY() {
+    return 0;
+}
