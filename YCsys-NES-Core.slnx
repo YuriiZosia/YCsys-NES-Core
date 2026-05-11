@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="YCsys-NES-Core/YCsys-NES-Core.vcxproj" />
+</Solution>
