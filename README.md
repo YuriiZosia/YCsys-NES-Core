@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="https://via.placeholder.com/200/0A0514/00FFFF?text=YCsys+NES" width="200" height="200" alt="YCsys NES Core Logo">
-  
+  <img src="https://placehold.jp/24/0a0514/00ffff/200x200.png?text=YCsys%20NES%20Core" width="200" height="200" alt="YCsys NES Core Logo">
+
   # YCsys-NES-Core
   
   **Код, що працює, а не існує. © 2026**
