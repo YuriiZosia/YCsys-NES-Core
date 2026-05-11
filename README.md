@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="https://placehold.jp/24/0a0514/00ffff/200x200.png?text=YCsys%20NES%20Core" width="200" height="200" alt="YCsys NES Core Logo">
 
   # YCsys-NES-Core
   
@@ -21,9 +20,9 @@
 ## 🚀 Етапи розробки (Roadmap)
 
 ### 1. ⚙️ Налаштування
-- [ ] **Visual Studio:** C++ Console App (Empty Project)
-- [ ] **Графіка:** Підключення бібліотеки SDL2 через NuGet
-- [ ] **Архітектура:** Базові класи (Bus, CPU, PPU, Cartridge)
+- [x] **Visual Studio:** C++ Console App (Empty Project)
+- [x] **Графіка:** Підключення бібліотеки SDL2 через NuGet
+- [x] **Архітектура:** Базові класи (Bus, CPU, PPU, Cartridge)
 
 ### 2. 🧠 CPU (MOS 6502) - База
 - [ ] **Регістри:** A, X, Y, PC, S, P (Status Flags)

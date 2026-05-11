@@ -1,3 +1,5 @@
+// YCsys NES Core - 6502 CPU implementation
+// Yurii Code system (YCsys) © 2026. Код, що працює, а не існує.
 #pragma once
 #include <cstdint>
 
@@ -13,15 +15,17 @@ public:
     void ConnectBus(Bus* n) { bus = n; }
 
 public:
-    // ТЕХНІЧНЕ ЗАВДАННЯ: 
-    // Оголосіть тут регістри процесора згідно з планом.
-    // Підказка щодо типів даних: 
-    // - Акумулятор (A), індекси (X, Y), вказівник стека (S) та статус (P) вміщують 1 байт.
-    // - Лічильник команд (PC - Program Counter) має вміщувати адресу пам'яті (від 0x0000 до 0xFFFF), тому він більший.
+	uint8_t  a, x, y;	       // Акумулятор та індексні регістри
+	uint8_t stkp;              // Вказівник стека (Stack Pointer)
+    uint8_t  status;           // Статус (Status)
+    uint16_t pc;               // Лічильник команд (Program Counter)
 
-    uint8_t  a = 0x00;      // Акумулятор (Accumulator)
-    // ... ДОДАЙТЕ ІНШІ РЕГІСТРИ ТУТ (X, Y, PC, S, status/P) ...
-
+	void reset(){              // Скидання процесора до початкового стану
+	    a = x = y = 0;
+        stkp = 0xFD;
+        status = 0x00 | FLAGS6502::U; // Встановлюємо прапорець U (завжди 1)
+		pc = read(0xFFFC) | (read(0xFFFD) << 8); // Читаємо адресу початку виконання з 0xFFFC/0xFFFD
+    }
 
     // Прапорці статусу (Status Flags) - C Z I D B U V N
     // Ми використовуємо enum для визначення позиції кожного прапорця у 8-бітному регістрі статусу.
