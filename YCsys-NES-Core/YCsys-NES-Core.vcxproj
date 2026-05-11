@@ -140,6 +140,7 @@
     <ClCompile Include="Bus.cpp" />
     <ClCompile Include="Cartridge.cpp" />
     <ClCompile Include="CPU.cpp" />
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="PPU.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
