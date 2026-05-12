@@ -150,12 +150,18 @@ uint8_t CPU6502::LDY() {
     SetFlag(FLAGS6502::N, (y & 0x80) != 0);
     return 1;
 }
+// STA (Store Accumulator)
 uint8_t CPU6502::STA() {
+	write(addr_abs, a); // Записуємо значення акумулятора в пам'ять за адресою addr_abs
     return 0;
 }
+// STX (Store X Register)
 uint8_t CPU6502::STX() {
+    write(addr_abs, x); // Записуємо значення регістра X в пам'ять за адресою addr_abs
     return 0;
 }
+// STY (Store Y Register)
 uint8_t CPU6502::STY() {
+    write(addr_abs, y); // Записуємо значення регістра Y в пам'ять за адресою addr_abs
     return 0;
 }
