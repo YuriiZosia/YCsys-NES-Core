@@ -20,6 +20,10 @@ public:
     uint8_t  status;           // Статус (Status)
     uint16_t pc;               // Лічильник команд (Program Counter)
 
+    uint8_t  fetched = 0x00;   // Змінна для зберігання прочитаних даних
+    uint16_t addr_abs = 0x0000; // Змінна для зберігання обчисленої адреси (куди звертатися)
+    uint8_t  opcode = 0x00;   // Поточний опкод
+
 	void reset(){              // Скидання процесора до початкового стану
 	    a = x = y = 0;
         stkp = 0xFD;
@@ -54,6 +58,10 @@ public:
     uint8_t ABY();  uint8_t IND();
     uint8_t IZX();  uint8_t IZY();
 
+	// Інструкції процесора Завантаження/Збереження
+	uint8_t LDA();  uint8_t LDX();  uint8_t LDY();
+	uint8_t STA();  uint8_t STX();  uint8_t STY();
+
 private:
     // Вказівник на головну шину
     Bus* bus = nullptr;
@@ -61,4 +69,7 @@ private:
     // Внутрішні функції CPU для зручного спілкування з шиною
     uint8_t read(uint16_t addr);
     void write(uint16_t addr, uint8_t data);
+    uint8_t fetch();
+
+	void clock();
 };
