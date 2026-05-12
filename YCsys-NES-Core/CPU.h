@@ -62,6 +62,9 @@ public:
 	uint8_t LDA();  uint8_t LDX();  uint8_t LDY();
 	uint8_t STA();  uint8_t STX();  uint8_t STY();
 
+    // Інструкції процесора Арифметичні
+	uint8_t ADC();  uint8_t SBC();
+
 private:
     // Вказівник на головну шину
     Bus* bus = nullptr;
