@@ -36,8 +36,9 @@ void CPU6502::write(uint16_t addr, uint8_t data) {
 
 // Допоміжна функція fetch() для читання даних за адресою addr_abs
 uint8_t CPU6502::fetch() {
-    // Якщо режим адресації не неявний (IMP), читаємо дані з пам'яті
-    fetched = read(addr_abs);
+    if (!is_accumulator) {
+        fetched = read(addr_abs);
+    }
     return fetched;
 }
 
@@ -56,6 +57,7 @@ void CPU6502::SetFlag(FLAGS6502 f, bool v) {
 }
 
 void CPU6502::clock() {
+    is_accumulator = false; // Скидаємо перед кожною інструкцією
     // 1. Читаємо опкод
     opcode = read(pc);
     pc++;
@@ -85,7 +87,7 @@ void CPU6502::clock() {
 
         // --- ГРУПА ІНКРЕМЕНТУ / ДЕКРЕМЕНТУ ---
         // Робота з регістрами (Implied)
-    case 0xE8: IMP(); INX(); break; // INX
+    case 0xE8: IMP(); INX(); break; // INX 
     case 0xC8: IMP(); INY(); break; // INY
     case 0xCA: IMP(); DEX(); break; // DEX
     case 0x88: IMP(); DEY(); break; // DEY
@@ -110,9 +112,33 @@ void CPU6502::clock() {
     case 0x0D: ABS(); ORA(); break;
 
         // EOR (Exclusive OR / XOR)
-    case 0x49: IMM(); EOR(); break;
+	case 0x49: IMM(); EOR(); break; // EOR безпосередня адресація
     case 0x45: ZP0(); EOR(); break;
     case 0x4D: ABS(); EOR(); break;
+        // BIT (Bit Test)
+    case 0x24: ZP0(); BIT(); break; // BIT нульова сторінка
+    case 0x2C: ABS(); BIT(); break; // BIT абсолютна
+
+        // --- ЗСУВИ (SHIFTS) ---
+        // ASL (Arithmetic Shift Left)
+    case 0x0A: IMP(); ASL(); break; // ASL Accumulator
+    case 0x06: ZP0(); ASL(); break; // ASL Zero Page
+    case 0x0E: ABS(); ASL(); break; // ASL Absolute
+
+        // LSR (Logical Shift Right)
+    case 0x4A: IMP(); LSR(); break;
+    case 0x46: ZP0(); LSR(); break;
+    case 0x4E: ABS(); LSR(); break;
+
+        // ROL (Rotate Left)
+    case 0x2A: IMP(); ROL(); break;
+    case 0x26: ZP0(); ROL(); break;
+    case 0x2E: ABS(); ROL(); break;
+
+        // ROR (Rotate Right)
+    case 0x6A: IMP(); ROR(); break;
+    case 0x66: ZP0(); ROR(); break;
+    case 0x6E: ABS(); ROR(); break;
 
         // Якщо опкод ще не реалізований або невідомий - нічого не робимо
     default: break;
@@ -121,6 +147,8 @@ void CPU6502::clock() {
 
 // Створюємо заглужки- заготовки для режимів адресації, щоб код компілювався
 uint8_t CPU6502::IMP() {
+    is_accumulator = true;
+    fetched = a; // Одразу завантажуємо значення акумулятора для роботи
     return 0;
 }
 
@@ -361,4 +389,21 @@ uint8_t CPU6502::EOR() {
     SetFlag(FLAGS6502::Z, (a & 0x00FF) == 0x00);
     SetFlag(FLAGS6502::N, (a & 0x80) != 0);
     return 1;
+}
+
+// BIT (Bit Test) - тестує біти в акумуляторі та встановлює прапорці на основі даних з пам'яті
+uint8_t CPU6502::BIT() {
+    fetch();
+
+    // Z-flag: Встановлюється, якщо (A AND M) == 0
+    uint8_t temp = a & fetched;
+    SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0x00);
+
+    // N-flag: Набуває значення 7-го біта даних прямо з пам'яті
+    SetFlag(FLAGS6502::N, (fetched & (1 << 7)) != 0);
+
+    // V-flag: Набуває значення 6-го біта даних прямо з пам'яті
+    SetFlag(FLAGS6502::V, (fetched & (1 << 6)) != 0);
+
+    return 0; // BIT не потребує додаткових тактів
 }

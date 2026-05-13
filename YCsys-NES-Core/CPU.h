@@ -24,6 +24,8 @@ public:
     uint16_t addr_abs = 0x0000; // Змінна для зберігання обчисленої адреси (куди звертатися)
     uint8_t  opcode = 0x00;   // Поточний опкод
 
+    bool is_accumulator = false; // Показує, чи працює поточна команда з акумулятором
+
 	void reset(){              // Скидання процесора до початкового стану
 	    a = x = y = 0;
         stkp = 0xFD;
@@ -70,7 +72,10 @@ public:
     uint8_t DEC();  uint8_t DEX();  uint8_t DEY();
 
     // --- Інструкції процесора  Логічні операції ---
-    uint8_t AND();  uint8_t ORA();  uint8_t EOR();
+    uint8_t AND();  uint8_t ORA();  uint8_t EOR(); uint8_t BIT();
+
+	// --- Інструкції процесора Зсуви та обертання ---
+    uint8_t ASL(); uint8_t LSR(); uint8_t ROL(); uint8_t ROR();
 
 private:
     // Вказівник на головну шину
