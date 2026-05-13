@@ -60,11 +60,31 @@ void CPU6502::clock() {
     opcode = read(pc);
     pc++;
 
-    // 2. Декодуємо та виконуємо. 
-    // Опкод 0xA9 - це LDA з режимом IMM.
-    if (opcode == 0xA9) {
-        IMM(); // Викликаємо режим адресації (він запише адресу в addr_abs)
-        LDA(); // Виконуємо команду
+    // 2. Декодуємо та виконуємо через switch
+    switch (opcode) {
+        // --- ГРУПА ЗАВАНТАЖЕННЯ / ЗБЕРЕЖЕННЯ ---
+        // LDA (Load Accumulator)
+    case 0xA9: IMM(); LDA(); break; // Безпосередня адресація
+    case 0xA5: ZP0(); LDA(); break; // Адресація нульової сторінки
+    case 0xAD: ABS(); LDA(); break; // Абсолютна адресація
+
+        // STA (Store Accumulator)
+    case 0x85: ZP0(); STA(); break;
+    case 0x8D: ABS(); STA(); break;
+
+        // --- ГРУПА АРИФМЕТИКИ ---
+        // ADC (Add with Carry)
+    case 0x69: IMM(); ADC(); break;
+    case 0x65: ZP0(); ADC(); break;
+    case 0x6D: ABS(); ADC(); break;
+
+        // SBC (Subtract with Carry)
+    case 0xE9: IMM(); SBC(); break;
+    case 0xE5: ZP0(); SBC(); break;
+    case 0xED: ABS(); SBC(); break;
+
+        // Якщо опкод ще не реалізований або невідомий - нічого не робимо
+    default: break;
     }
 }
 
