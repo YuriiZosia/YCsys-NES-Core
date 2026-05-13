@@ -84,7 +84,7 @@ void CPU6502::clock() {
     case 0xED: ABS(); SBC(); break;
 
         // --- ГРУПА ІНКРЕМЕНТУ / ДЕКРЕМЕНТУ ---
-        // // Робота з регістрами (Implied)
+        // Робота з регістрами (Implied)
     case 0xE8: IMP(); INX(); break; // INX
     case 0xC8: IMP(); INY(); break; // INY
     case 0xCA: IMP(); DEX(); break; // DEX
@@ -97,6 +97,22 @@ void CPU6502::clock() {
         // DEC (Decrement Memory)
     case 0xC6: ZP0(); DEC(); break; // DEC нульова сторінка
     case 0xCE: ABS(); DEC(); break; // DEC абсолютна
+
+        // --- ЛОГІЧНІ ОПЕРАЦІЇ ---
+        // AND (Logical AND)
+    case 0x29: IMM(); AND(); break;
+    case 0x25: ZP0(); AND(); break;
+    case 0x2D: ABS(); AND(); break;
+
+        // ORA (Logical Inclusive OR)
+    case 0x09: IMM(); ORA(); break;
+    case 0x05: ZP0(); ORA(); break;
+    case 0x0D: ABS(); ORA(); break;
+
+        // EOR (Exclusive OR / XOR)
+    case 0x49: IMM(); EOR(); break;
+    case 0x45: ZP0(); EOR(); break;
+    case 0x4D: ABS(); EOR(); break;
 
         // Якщо опкод ще не реалізований або невідомий - нічого не робимо
     default: break;
@@ -316,3 +332,33 @@ uint8_t CPU6502::DEC() {
 }
 
 // --------------------------------------------------------------
+//
+// Логічні операції (Logical)
+//
+
+// Логічне І (AND)
+uint8_t CPU6502::AND() {
+    fetch();
+    a = a & fetched;
+    SetFlag(FLAGS6502::Z, (a & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    return 1;
+}
+
+// Логічне АБО (ORA - OR with Accumulator)
+uint8_t CPU6502::ORA() {
+    fetch();
+    a = a | fetched;
+    SetFlag(FLAGS6502::Z, (a & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    return 1;
+}
+
+// Виключне АБО (EOR - Exclusive OR / XOR)
+uint8_t CPU6502::EOR() {
+    fetch();
+    a = a ^ fetched;
+    SetFlag(FLAGS6502::Z, (a & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    return 1;
+}

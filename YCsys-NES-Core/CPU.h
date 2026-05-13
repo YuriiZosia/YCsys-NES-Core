@@ -50,7 +50,7 @@ public:
     // Встановлення (true = 1) або скидання (false = 0) конкретного прапорця
     void SetFlag(FLAGS6502 f, bool v);
 
-    // Режими адресації
+    // --- Режими адресації ---
     uint8_t IMP();  uint8_t IMM();
     uint8_t ZP0();  uint8_t ZPX();
     uint8_t ZPY();  uint8_t REL();
@@ -58,16 +58,19 @@ public:
     uint8_t ABY();  uint8_t IND();
     uint8_t IZX();  uint8_t IZY();
 
-	// Інструкції процесора Завантаження/Збереження
+	// --- Інструкції процесора Завантаження/Збереження ---
 	uint8_t LDA();  uint8_t LDX();  uint8_t LDY();
 	uint8_t STA();  uint8_t STX();  uint8_t STY();
 
-    // Інструкції процесора Арифметичні
+    // --- Інструкції процесора Арифметичні ---
 	uint8_t ADC();  uint8_t SBC();
 
-	// Інструкції процесора Інкремент/Декремент
+	// --- Інструкції процесора Інкремент/Декремент ---
     uint8_t INC();  uint8_t INX();  uint8_t INY();
     uint8_t DEC();  uint8_t DEX();  uint8_t DEY();
+
+    // --- Інструкції процесора  Логічні операції ---
+    uint8_t AND();  uint8_t ORA();  uint8_t EOR();
 
 private:
     // Вказівник на головну шину
