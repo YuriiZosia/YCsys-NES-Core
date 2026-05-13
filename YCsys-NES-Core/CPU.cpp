@@ -83,6 +83,21 @@ void CPU6502::clock() {
     case 0xE5: ZP0(); SBC(); break;
     case 0xED: ABS(); SBC(); break;
 
+        // --- ГРУПА ІНКРЕМЕНТУ / ДЕКРЕМЕНТУ ---
+        // // Робота з регістрами (Implied)
+    case 0xE8: IMP(); INX(); break; // INX
+    case 0xC8: IMP(); INY(); break; // INY
+    case 0xCA: IMP(); DEX(); break; // DEX
+    case 0x88: IMP(); DEY(); break; // DEY
+
+        // INC (Increment Memory)
+    case 0xE6: ZP0(); INC(); break; // INC нульова сторінка
+    case 0xEE: ABS(); INC(); break; // INC абсолютна
+
+        // DEC (Decrement Memory)
+    case 0xC6: ZP0(); DEC(); break; // DEC нульова сторінка
+    case 0xCE: ABS(); DEC(); break; // DEC абсолютна
+
         // Якщо опкод ще не реалізований або невідомий - нічого не робимо
     default: break;
     }
