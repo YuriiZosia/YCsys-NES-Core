@@ -77,6 +77,9 @@ public:
 	// --- Інструкції процесора Зсуви та обертання ---
     uint8_t ASL(); uint8_t LSR(); uint8_t ROL(); uint8_t ROR();
 
+	// --- Інструкції процесора Управління потоком ---
+    uint8_t JMP();  uint8_t JSR();  uint8_t RTS();  uint8_t RTI();
+
 private:
     // Вказівник на головну шину
     Bus* bus = nullptr;

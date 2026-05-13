@@ -140,6 +140,8 @@ void CPU6502::clock() {
     case 0x66: ZP0(); ROR(); break;
     case 0x6E: ABS(); ROR(); break;
 
+    case 0x6C: IND(); JMP(); break; // JMP Indirect (з урахуванням багу!)
+
         // Якщо опкод ще не реалізований або невідомий - нічого не робимо
     default: break;
     }
@@ -196,7 +198,26 @@ uint8_t CPU6502::ABX() {
 uint8_t CPU6502::ABY() {
     return 0;
 }
+
+// Режим адресації IND (Indirect) - використовується лише для JMP, де 16-бітна адреса вказується в наступних двох байтах після опкода, але фактична адреса для переходу береться з пам'яті за цією адресою
 uint8_t CPU6502::IND() {
+    uint16_t ptr_lo = read(pc);
+    pc++;
+    uint16_t ptr_hi = read(pc);
+    pc++;
+
+    uint16_t ptr = (ptr_hi << 8) | ptr_lo;
+
+    // Відтворення апаратного багу 6502 з межею сторінки
+    if (ptr_lo == 0x00FF) {
+        // Симулюємо баг переходу сторінки
+        addr_abs = (read(ptr & 0xFF00) << 8) | read(ptr);
+    }
+    else {
+        // Нормальна поведінка
+        addr_abs = (read(ptr + 1) << 8) | read(ptr);
+    }
+
     return 0;
 }
 uint8_t CPU6502::IZX() {
@@ -413,6 +434,7 @@ uint8_t CPU6502::BIT() {
 // Операції зсуву та обертання (Shifts and Rotates)
 //
 
+// ASL (Arithmetic Shift Left) - зсуває біти вліво, нуль потрапляє в правий бік, а лівий біт потрапляє в Carry
 uint8_t CPU6502::ASL() {
     fetch(); // Завдяки логіці в IMP() та fetch(), тут уже буде або 'a', або значення з пам'яті
     uint16_t temp = (uint16_t)fetched << 1; // Зсуваємо вліво. Використовуємо 16 біт, щоб "зловити" 7-й біт, який випаде у 8-й
@@ -432,6 +454,7 @@ uint8_t CPU6502::ASL() {
     return 0;
 }
 
+// LSR (Logical Shift Right) - зсуває біти вправо, нуль потрапляє в лівий бік, а правий біт потрапляє в Carry
 uint8_t CPU6502::LSR() {
     fetch();
     // Нульовий біт потрапляє в Carry
@@ -442,6 +465,48 @@ uint8_t CPU6502::LSR() {
 
     SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0x00);
     SetFlag(FLAGS6502::N, (temp & 0x0080) != 0);
+
+    if (is_accumulator) {
+        a = temp & 0x00FF;
+    }
+    else {
+        write(addr_abs, temp & 0x00FF);
+    }
+    return 0;
+}
+
+// ROL (Rotate Left) - зсуває біти вліво, нуль потрапляє в правий бік, а лівий біт потрапляє в Carry. При цьому, старий Carry потрапляє в правий біт.
+uint8_t CPU6502::ROL() {
+    fetch();
+
+    /// Зсуваємо вліво, звільняючи 0-й біт, і записуємо в нього поточний Carry
+    uint16_t temp = (uint16_t)(fetched << 1) | GetFlag(FLAGS6502::C);
+
+    SetFlag(FLAGS6502::C, (temp & 0xFF00) != 0);
+    SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (temp & 0x0080) != 0);
+
+    if (is_accumulator) {
+        a = temp & 0x00FF;
+    }
+    else {
+        write(addr_abs, temp & 0x00FF);
+    }
+    return 0;
+}
+
+// ROR (Rotate Right) - зсуває біти вправо, нуль потрапляє в лівий бік, а правий біт потрапляє в Carry. При цьому, старий Carry потрапляє в лівий біт.
+uint8_t CPU6502::ROR() {
+    fetch();
+    // Новий Carry — це 0-й біт ДО зсуву
+    bool bNewCarry = (fetched & 0x01) != 0;
+
+    // Зсуваємо вправо, звільняючи 7-й біт, і «десантуємо» в нього Carry (зсунувши його на 7 позицій вліво)
+    uint16_t temp = (uint16_t)(fetched >> 1) | ((uint16_t)GetFlag(FLAGS6502::C) << 7);
+
+    SetFlag(FLAGS6502::C, bNewCarry); // Встановлюємо той самий 0-й біт
+    SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (temp & 0x80) != 0);
 
     if (is_accumulator) {
         a = temp & 0x00FF;
