@@ -407,3 +407,47 @@ uint8_t CPU6502::BIT() {
 
     return 0; // BIT не потребує додаткових тактів
 }
+
+// --------------------------------------------------------------
+//
+// Операції зсуву та обертання (Shifts and Rotates)
+//
+
+uint8_t CPU6502::ASL() {
+    fetch(); // Завдяки логіці в IMP() та fetch(), тут уже буде або 'a', або значення з пам'яті
+    uint16_t temp = (uint16_t)fetched << 1; // Зсуваємо вліво. Використовуємо 16 біт, щоб "зловити" 7-й біт, який випаде у 8-й
+
+    SetFlag(FLAGS6502::C, (temp & 0xFF00) != 0);
+    SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (temp & 0x80) != 0);
+
+    // А тепер вирішуємо, куди повернути результат
+    if (is_accumulator) {
+        a = temp & 0x00FF;
+    }
+    else {
+        write(addr_abs, temp & 0x00FF);
+    }
+
+    return 0;
+}
+
+uint8_t CPU6502::LSR() {
+    fetch();
+    // Нульовий біт потрапляє в Carry
+    SetFlag(FLAGS6502::C, (fetched & 0x0001) != 0);
+
+    // Зсуваємо вправо
+    uint8_t temp = fetched >> 1;
+
+    SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (temp & 0x0080) != 0);
+
+    if (is_accumulator) {
+        a = temp & 0x00FF;
+    }
+    else {
+        write(addr_abs, temp & 0x00FF);
+    }
+    return 0;
+}
