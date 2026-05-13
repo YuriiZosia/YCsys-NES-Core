@@ -41,7 +41,7 @@ uint8_t CPU6502::fetch() {
     return fetched;
 }
 
-uint8_t CPU6502::GetFlag(FLAGS6502 f) {
+uint8_t CPU6502::GetFlag(FLAGS6502 f) const{
     // Якщо біт за маскою 'f' встановлений, повертаємо 1, інакше 0
     return ((status & f) > 0) ? 1 : 0;
 }
@@ -241,8 +241,63 @@ uint8_t CPU6502::SBC() {
     SetFlag(FLAGS6502::V, (~((uint16_t)a ^ value) & ((uint16_t)a ^ (uint16_t)temp)) & 0x0080);
 
     a = temp & 0x00FF;
-
     return 1;
+}
+
+// --------------------------------------------------------------
+// Інкремент та Декремент (Increment/Decrement)
+//
+
+// INX (Increment X Register)
+uint8_t CPU6502::INX() {
+    x++;
+    SetFlag(FLAGS6502::Z, (x & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (x & 0x80) != 0);
+    return 0;
+}
+
+// INY (Increment Y Register)
+uint8_t CPU6502::INY() {
+    y++;
+    SetFlag(FLAGS6502::Z, (y & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (y & 0x80) != 0);
+    return 0;
+}
+
+// INC (Increment Memory) - інкрементує значення в пам'яті за адресою addr_abs
+uint8_t CPU6502::INC() {
+    fetch();
+    uint16_t temp = (uint16_t)fetched + 1;
+    write(addr_abs, temp & 0x00FF);
+    SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (temp & 0x80) != 0);
+    return 0;
+}
+
+// DEX (Decrement X Register)
+uint8_t CPU6502::DEX() {
+    x--;
+    SetFlag(FLAGS6502::Z, (x & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (x & 0x80) != 0);
+    return 0;
+}
+
+// DEY (Decrement Y Register)
+uint8_t CPU6502::DEY() {
+    y--;
+    SetFlag(FLAGS6502::Z, (y & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (y & 0x80) != 0);
+    return 0;
+}
+
+// DEC (Decrement Memory) - декрементує значення в пам'яті за адресою addr_abs
+uint8_t CPU6502::DEC() {
+    fetch();
+    uint16_t temp = (uint16_t)fetched - 1;
+    write(addr_abs, temp & 0x00FF);
+    SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0x00);
+    SetFlag(FLAGS6502::N, (temp & 0x80) != 0);
+    return 0;
 }
 
 // --------------------------------------------------------------
