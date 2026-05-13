@@ -202,12 +202,27 @@ uint8_t CPU6502::ADC() {
 	SetFlag(FLAGS6502::V, ((~((uint16_t)a ^ (uint16_t)fetched) & ((uint16_t)a ^ (uint16_t)temp)) & 0x80) != 0);
 
 	a = temp & 0x00FF; // Зберігаємо лише молодший байт результату в акумуляторі (6502 працює з 8-бітними числами)
-    return 0;
+    return 1; // Ця команда може потребувати додаткового такту в деяких режимах
 }
 
 // SBC (Subtract with Carry)
 uint8_t CPU6502::SBC() {
-    return 0;
+    fetch(); // Отримуємо дані, які потрібно додати до акумулятора
+
+    // Робимо інверсію через XOR & 0x00FF, бо віднімання в 6502 - це додавання інвертованого значення
+    uint16_t value = (uint16_t)fetched ^ 0x00FF;
+
+    uint16_t temp = (uint16_t)a + value + (uint16_t)GetFlag(FLAGS6502::C);
+
+    // Встановлюємо прапорці
+    SetFlag(FLAGS6502::C, temp > 0xFF);
+    SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0);
+    SetFlag(FLAGS6502::N, (temp & 0x80) != 0);
+    SetFlag(FLAGS6502::V, (~((uint16_t)a ^ value) & ((uint16_t)a ^ (uint16_t)temp)) & 0x0080);
+
+    a = temp & 0x00FF;
+
+    return 1;
 }
 
 // --------------------------------------------------------------
