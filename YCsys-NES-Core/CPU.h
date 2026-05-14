@@ -91,6 +91,15 @@ public:
     uint8_t CLC(); uint8_t CLD(); uint8_t CLI(); uint8_t CLV();
     uint8_t SEC(); uint8_t SED(); uint8_t SEI();
 
+	// --- Інструкції процесора Системні та пересилки ---
+    uint8_t NOP();  uint8_t BRK();
+    uint8_t TAX();  uint8_t TAY();  uint8_t TSX();
+    uint8_t TXA();  uint8_t TXS();  uint8_t TYA();
+    uint8_t PHA();  uint8_t PHP();  uint8_t PLA();  uint8_t PLP();
+
+	// --- Інструкції процесора Група Порівняння ---
+    uint8_t CMP();  uint8_t CPX();  uint8_t CPY();
+
 private:
     // Таблиця базових циклів для кожного з 256 опкодів.
     // Знаходиться в private, оскільки це внутрішня логіка процесора.
