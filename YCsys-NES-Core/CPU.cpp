@@ -86,112 +86,126 @@ void CPU6502::SetFlag(FLAGS6502 f, bool v) {
 //        ||           ||           ||           ||
 
 void CPU6502::clock() {
-    is_accumulator = false; // Скидаємо перед кожною інструкцією
-    // 1. Читаємо опкод
-    opcode = read(pc);
-    pc++;
+    // Якщо cycles дорівнює 0, це означає, що процесор завершив 
+    // виконання попередньої інструкції і готовий читати нову.
+    if (cycles == 0) {
+        is_accumulator = false; // Скидаємо перед кожною інструкцією
 
-    // 2. Декодуємо та виконуємо через switch
-    switch (opcode) {
-        // --- ГРУПА ЗАВАНТАЖЕННЯ / ЗБЕРЕЖЕННЯ ---
-        // LDA (Load Accumulator)
-    case 0xA9: IMM(); LDA(); break; // Безпосередня адресація
-    case 0xA5: ZP0(); LDA(); break; // Адресація нульової сторінки
-    case 0xAD: ABS(); LDA(); break; // Абсолютна адресація
+        // 1. Читаємо опкод
+        opcode = read(pc);
+        pc++;
 
-        // STA (Store Accumulator)
-    case 0x85: ZP0(); STA(); break;
-    case 0x8D: ABS(); STA(); break;
+        // 2. Отримуємо базову кількість тактів З ТАБЛИЦІ!
+        cycles = cycle_table[opcode];
 
-        // --- ГРУПА АРИФМЕТИКИ ---
-        // ADC (Add with Carry)
-    case 0x69: IMM(); ADC(); break;
-    case 0x65: ZP0(); ADC(); break;
-    case 0x6D: ABS(); ADC(); break;
+        // 3. Декодуємо та виконуємо через switch
+        switch (opcode) {
+            // --- ГРУПА ЗАВАНТАЖЕННЯ / ЗБЕРЕЖЕННЯ ---
+            // LDA (Load Accumulator)
+        case 0xA9: IMM(); LDA(); break; // Безпосередня адресація
+        case 0xA5: ZP0(); LDA(); break; // Адресація нульової сторінки
+        case 0xAD: ABS(); LDA(); break; // Абсолютна адресація
 
-        // SBC (Subtract with Carry)
-    case 0xE9: IMM(); SBC(); break;
-    case 0xE5: ZP0(); SBC(); break;
-    case 0xED: ABS(); SBC(); break;
+            // STA (Store Accumulator)
+        case 0x85: ZP0(); STA(); break;
+        case 0x8D: ABS(); STA(); break;
 
-        // --- ГРУПА ІНКРЕМЕНТУ / ДЕКРЕМЕНТУ ---
-        // Робота з регістрами (Implied)
-    case 0xE8: IMP(); INX(); break; // INX 
-    case 0xC8: IMP(); INY(); break; // INY
-    case 0xCA: IMP(); DEX(); break; // DEX
-    case 0x88: IMP(); DEY(); break; // DEY
+            // --- ГРУПА АРИФМЕТИКИ ---
+            // ADC (Add with Carry)
+        case 0x69: IMM(); ADC(); break;
+        case 0x65: ZP0(); ADC(); break;
+        case 0x6D: ABS(); ADC(); break;
 
-        // INC (Increment Memory)
-    case 0xE6: ZP0(); INC(); break; // INC нульова сторінка
-    case 0xEE: ABS(); INC(); break; // INC абсолютна
+            // SBC (Subtract with Carry)
+        case 0xE9: IMM(); SBC(); break;
+        case 0xE5: ZP0(); SBC(); break;
+        case 0xED: ABS(); SBC(); break;
 
-        // DEC (Decrement Memory)
-    case 0xC6: ZP0(); DEC(); break; // DEC нульова сторінка
-    case 0xCE: ABS(); DEC(); break; // DEC абсолютна
+            // --- ГРУПА ІНКРЕМЕНТУ / ДЕКРЕМЕНТУ ---
+            // Робота з регістрами (Implied)
+        case 0xE8: IMP(); INX(); break; // INX 
+        case 0xC8: IMP(); INY(); break; // INY
+        case 0xCA: IMP(); DEX(); break; // DEX
+        case 0x88: IMP(); DEY(); break; // DEY
 
-        // --- ЛОГІЧНІ ОПЕРАЦІЇ ---
-        // AND (Logical AND)
-    case 0x29: IMM(); AND(); break;
-    case 0x25: ZP0(); AND(); break;
-    case 0x2D: ABS(); AND(); break;
+            // INC (Increment Memory)
+        case 0xE6: ZP0(); INC(); break; // INC нульова сторінка
+        case 0xEE: ABS(); INC(); break; // INC абсолютна
 
-        // ORA (Logical Inclusive OR)
-    case 0x09: IMM(); ORA(); break;
-    case 0x05: ZP0(); ORA(); break;
-    case 0x0D: ABS(); ORA(); break;
+            // DEC (Decrement Memory)
+        case 0xC6: ZP0(); DEC(); break; // DEC нульова сторінка
+        case 0xCE: ABS(); DEC(); break; // DEC абсолютна
 
-        // EOR (Exclusive OR / XOR)
-	case 0x49: IMM(); EOR(); break; // EOR безпосередня адресація
-    case 0x45: ZP0(); EOR(); break;
-    case 0x4D: ABS(); EOR(); break;
-        // BIT (Bit Test)
-    case 0x24: ZP0(); BIT(); break; // BIT нульова сторінка
-    case 0x2C: ABS(); BIT(); break; // BIT абсолютна
+            // --- ЛОГІЧНІ ОПЕРАЦІЇ ---
+            // AND (Logical AND)
+        case 0x29: IMM(); AND(); break;
+        case 0x25: ZP0(); AND(); break;
+        case 0x2D: ABS(); AND(); break;
 
-        // --- ЗСУВИ (SHIFTS) ---
-        // ASL (Arithmetic Shift Left)
-    case 0x0A: IMP(); ASL(); break; // ASL Accumulator
-    case 0x06: ZP0(); ASL(); break; // ASL Zero Page
-    case 0x0E: ABS(); ASL(); break; // ASL Absolute
+            // ORA (Logical Inclusive OR)
+        case 0x09: IMM(); ORA(); break;
+        case 0x05: ZP0(); ORA(); break;
+        case 0x0D: ABS(); ORA(); break;
 
-        // LSR (Logical Shift Right)
-    case 0x4A: IMP(); LSR(); break;
-    case 0x46: ZP0(); LSR(); break;
-    case 0x4E: ABS(); LSR(); break;
+            // EOR (Exclusive OR / XOR)
+        case 0x49: IMM(); EOR(); break; // EOR безпосередня адресація
+        case 0x45: ZP0(); EOR(); break;
+        case 0x4D: ABS(); EOR(); break;
 
-        // ROL (Rotate Left)
-    case 0x2A: IMP(); ROL(); break;
-    case 0x26: ZP0(); ROL(); break;
-    case 0x2E: ABS(); ROL(); break;
+            // BIT (Bit Test)
+        case 0x24: ZP0(); BIT(); break; // BIT нульова сторінка
+        case 0x2C: ABS(); BIT(); break; // BIT абсолютна
 
-        // ROR (Rotate Right)
-    case 0x6A: IMP(); ROR(); break;
-    case 0x66: ZP0(); ROR(); break;
-    case 0x6E: ABS(); ROR(); break;
+            // --- ЗСУВИ (SHIFTS) ---
+            // ASL (Arithmetic Shift Left)
+        case 0x0A: IMP(); ASL(); break; // ASL Accumulator
+        case 0x06: ZP0(); ASL(); break; // ASL Zero Page
+        case 0x0E: ABS(); ASL(); break; // ASL Absolute
 
-		// --- УПРАВЛІННЯ ПОТОКОМ ---
-		// JMP (Jump)
-    case 0x4C: ABS(); JMP(); break; // JMP Absolute
-    case 0x6C: IND(); JMP(); break; // JMP Indirect (з урахуванням багу!)
+            // LSR (Logical Shift Right)
+        case 0x4A: IMP(); LSR(); break;
+        case 0x46: ZP0(); LSR(); break;
+        case 0x4E: ABS(); LSR(); break;
 
-		// JSR (Jump to Subroutine)
-    case 0x20: ABS(); JSR(); break; // JSR Absolute
-		// RTS (Return from Subroutine) та RTI (Return from Interrupt) - не мають операндів, тому використовують режим IMP (Implied)
-    case 0x60: IMP(); RTS(); break; // RTS Неявна (Implied)
-    case 0x40: IMP(); RTI(); break; // RTI Неявна (Implied)
+            // ROL (Rotate Left)
+        case 0x2A: IMP(); ROL(); break;
+        case 0x26: ZP0(); ROL(); break;
+        case 0x2E: ABS(); ROL(); break;
 
-		// УМОВНІ ПЕРЕХОДИ (Branching) - використовують відносну адресацію (REL)
-    case 0x90: REL(); BCC(); break; // Branch on Carry Clear
-    case 0xB0: REL(); BCS(); break; // Branch on Carry Set
-    case 0xF0: REL(); BEQ(); break; // Branch on Equal (Zero Set)
-    case 0xD0: REL(); BNE(); break; // Branch on Not Equal (Zero Clear)
-    case 0x30: REL(); BMI(); break; // Branch on Minus (Negative Set)
-    case 0x10: REL(); BPL(); break; // Branch on Plus (Negative Clear)
-    case 0x50: REL(); BVC(); break; // Branch on Overflow Clear
-    case 0x70: REL(); BVS(); break; // Branch on Overflow Set
-        // Якщо опкод ще не реалізований або невідомий - нічого не робимо
-    default: break;
+            // ROR (Rotate Right)
+        case 0x6A: IMP(); ROR(); break;
+        case 0x66: ZP0(); ROR(); break;
+        case 0x6E: ABS(); ROR(); break;
+
+            // --- УПРАВЛІННЯ ПОТОКОМ ---
+            // JMP (Jump)
+        case 0x4C: ABS(); JMP(); break; // JMP Absolute
+        case 0x6C: IND(); JMP(); break; // JMP Indirect (з урахуванням багу!)
+
+            // JSR (Jump to Subroutine)
+        case 0x20: ABS(); JSR(); break; // JSR Absolute
+
+            // RTS (Return from Subroutine) та RTI (Return from Interrupt) - не мають операндів, тому використовують режим IMP (Implied)
+        case 0x60: IMP(); RTS(); break; // RTS Неявна (Implied)
+        case 0x40: IMP(); RTI(); break; // RTI Неявна (Implied)
+
+            // УМОВНІ ПЕРЕХОДИ (Branching) - використовують відносну адресацію (REL)
+        case 0x90: REL(); BCC(); break; // Branch on Carry Clear
+        case 0xB0: REL(); BCS(); break; // Branch on Carry Set
+        case 0xF0: REL(); BEQ(); break; // Branch on Equal (Zero Set)
+        case 0xD0: REL(); BNE(); break; // Branch on Not Equal (Zero Clear)
+        case 0x30: REL(); BMI(); break; // Branch on Minus (Negative Set)
+        case 0x10: REL(); BPL(); break; // Branch on Plus (Negative Clear)
+        case 0x50: REL(); BVC(); break; // Branch on Overflow Clear
+        case 0x70: REL(); BVS(); break; // Branch on Overflow Set
+
+            // Якщо опкод ще не реалізований або невідомий - нічого не робимо
+        default: break;
+        }
     }
+
+    // Кожен виклик clock() імітує 1 такт генератора
+    cycles--;
 }
 
 //  _______________________________________________
