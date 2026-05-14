@@ -234,7 +234,16 @@ uint8_t CPU6502::ZPX() {
 uint8_t CPU6502::ZPY() {
     return 0;
 }
+
+// Режим адресації REL (Relative) - використовується для умовних переходів (Branching), де 8-бітне знакове зміщення вказується в наступному байті після опкода, і додається до поточного лічильника команд для отримання цільової адреси переходу
 uint8_t CPU6502::REL() {
+    // Читаємо байт як знакове число (int8_t). 
+    // Це автоматично робить "Sign Extension": 
+    // якщо 7-й біт == 1, то addr_rel (16-біт) отримає 0xFF в старший байт.
+    // (Замінює конструкцію: if (addr_rel & 0x80) addr_rel |= 0xFF00;)
+    addr_rel = (uint8_t)read(pc);
+    pc++;
+
     return 0;
 }
 
@@ -638,5 +647,83 @@ uint8_t CPU6502::RTI() {
     uint16_t hi = read(0x0100 + stkp);
 
 	pc = (hi << 8) | lo; // Зміщуємо hi вліво на 8 біт і додаємо lo, щоб отримати повну 16-бітну адресу
+    return 0;
+}
+
+// --------------------------------------------------------------
+
+//
+// Умовні переходи (Branching)
+//
+
+// BCC (Branch if Carry Clear) Перехід, якщо прапорець Carry дорівнює 0
+uint8_t CPU6502::BCC() {
+    if (GetFlag(FLAGS6502::C) == 0) {
+        addr_abs = pc + addr_rel;
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// BCS (Branch if Carry Set) Перехід, якщо прапорець Carry дорівнює 1
+uint8_t CPU6502::BCS() {
+    if (GetFlag(FLAGS6502::C) == 1) {
+        addr_abs = pc + addr_rel;
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// BEQ (Branch if Equal) Перехід, якщо прапорець Zero дорівнює 1 (результат дорівнює нулю)
+uint8_t CPU6502::BEQ() {
+    if (GetFlag(FLAGS6502::Z) == 1) {
+        addr_abs = pc + addr_rel;
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// BMI (Branch if Minus) Перехід, якщо прапорець Negative дорівнює 1
+uint8_t CPU6502::BMI() {
+    if (GetFlag(FLAGS6502::N) == 1) {
+        addr_abs = pc + addr_rel;
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// BNE (Branch if Not Equal) Перехід, якщо прапорець Zero дорівнює 0 (результат не дорівнює нулю)
+uint8_t CPU6502::BNE() {
+    if (GetFlag(FLAGS6502::Z) == 0) {
+        addr_abs = pc + addr_rel;
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// BPL (Branch if Plus) Перехід, якщо прапорець Negative дорівнює 0
+uint8_t CPU6502::BPL() {
+    if (GetFlag(FLAGS6502::N) == 0) {
+        addr_abs = pc + addr_rel;
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// BVC (Branch if Overflow Clear) Перехід, якщо прапорець Overflow дорівнює 0
+uint8_t CPU6502::BVC() {
+    if (GetFlag(FLAGS6502::V) == 0) {
+        addr_abs = pc + addr_rel;
+        pc = addr_abs;
+    }
+    return 0;
+}
+
+// BVS (Branch if Overflow Set) Перехід, якщо прапорець Overflow дорівнює 1
+uint8_t CPU6502::BVS() {
+    if (GetFlag(FLAGS6502::V) == 1) {
+        addr_abs = pc + addr_rel;
+        pc = addr_abs;
+    }
     return 0;
 }

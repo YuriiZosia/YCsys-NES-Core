@@ -15,19 +15,20 @@ public:
     void ConnectBus(Bus* n) { bus = n; }
 
 public:
-	uint8_t  a, x, y;	       // Акумулятор та індексні регістри
-	uint8_t stkp;              // Вказівник стека (Stack Pointer)
-    uint8_t  status;           // Статус (Status)
-    uint16_t pc;               // Лічильник команд (Program Counter)
+	uint8_t  a = 0x00, x = 0x00, y = 0x00;	// Акумулятор та індексні регістри
+	uint8_t stkp = 0x00;              // Вказівник стека (Stack Pointer)
+    uint8_t  status = 0x00;           // Статус (Status)
+    uint16_t pc = 0x0000;               // Лічильник команд (Program Counter)
 
     uint8_t  fetched = 0x00;   // Змінна для зберігання прочитаних даних
     uint16_t addr_abs = 0x0000; // Змінна для зберігання обчисленої адреси (куди звертатися)
     uint8_t  opcode = 0x00;   // Поточний опкод
+    uint16_t addr_rel = 0x0000; // Змінна для відносного зміщення
 
     bool is_accumulator = false; // Показує, чи працює поточна команда з акумулятором
 
 	void reset(){              // Скидання процесора до початкового стану
-	    a = x = y = 0;
+	    a = x = y = 0x00;
         stkp = 0xFD;
         status = 0x00 | FLAGS6502::U; // Встановлюємо прапорець U (завжди 1)
 		pc = read(0xFFFC) | (read(0xFFFD) << 8); // Читаємо адресу початку виконання з 0xFFFC/0xFFFD
