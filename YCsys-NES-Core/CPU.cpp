@@ -199,6 +199,19 @@ void CPU6502::clock() {
         case 0x50: REL(); BVC(); break; // Branch on Overflow Clear
         case 0x70: REL(); BVS(); break; // Branch on Overflow Set
 
+			// --- СКИДАННЯ ТА ВСТАНОВЛЕННЯ ПРАПОРЦІВ ---
+
+            // Очищення (Clear)
+        case 0x18: IMP(); CLC(); break;
+        case 0xD8: IMP(); CLD(); break;
+        case 0x58: IMP(); CLI(); break;
+        case 0xB8: IMP(); CLV(); break;
+
+            // Встановлення (Set)
+        case 0x38: IMP(); SEC(); break;
+        case 0xF8: IMP(); SED(); break;
+        case 0x78: IMP(); SEI(); break;
+
             // Якщо опкод ще не реалізований або невідомий - нічого не робимо
         default: break;
         }
@@ -741,3 +754,20 @@ uint8_t CPU6502::BVS() {
     }
     return 0;
 }
+
+// --------------------------------------------------------------
+
+//
+// Управління прапорцями (Flag Operations)
+//
+
+// Очищення прапорців (Clear - ставимо false/0)
+uint8_t CPU6502::CLC() { SetFlag(FLAGS6502::C, false); return 0; } // CLC (Clear Carry) Прапорець Carry = 0 [2]
+uint8_t CPU6502::CLD() { SetFlag(FLAGS6502::D, false); return 0; } // CLD (Clear Decimal) Прапорець Decimal = 0 [2]
+uint8_t CPU6502::CLI() { SetFlag(FLAGS6502::I, false); return 0; } // CLI (Clear Interrupt) Прапорець Interrupt = 0 [2]
+uint8_t CPU6502::CLV() { SetFlag(FLAGS6502::V, false); return 0; } // CLV (Clear Overflow) Прапорець Overflow = 0 [2]
+
+// Встановлення прапорців (Set - ставимо true/1)
+uint8_t CPU6502::SEC() { SetFlag(FLAGS6502::C, true); return 0; }  // SEC (Set Carry) Прапорець Carry = 1 [2]
+uint8_t CPU6502::SED() { SetFlag(FLAGS6502::D, true); return 0; }  // SED (Set Decimal) Прапорець Decimal = 1 [2]
+uint8_t CPU6502::SEI() { SetFlag(FLAGS6502::I, true); return 0; }  // SEI (Set Interrupt) Прапорець Interrupt = 1 [2]

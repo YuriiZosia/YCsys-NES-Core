@@ -87,6 +87,10 @@ public:
     uint8_t BCC();  uint8_t BCS();  uint8_t BEQ();  uint8_t BMI();
     uint8_t BNE();  uint8_t BPL();  uint8_t BVC();  uint8_t BVS();
 
+	// --- Інструкції процесора Скидання та встановлення прапорців ---
+    uint8_t CLC(); uint8_t CLD(); uint8_t CLI(); uint8_t CLV();
+    uint8_t SEC(); uint8_t SED(); uint8_t SEI();
+
 private:
     // Таблиця базових циклів для кожного з 256 опкодів.
     // Знаходиться в private, оскільки це внутрішня логіка процесора.
