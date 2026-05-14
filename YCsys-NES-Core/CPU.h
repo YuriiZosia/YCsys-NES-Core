@@ -80,6 +80,10 @@ public:
 	// --- Інструкції процесора Управління потоком ---
     uint8_t JMP();  uint8_t JSR();  uint8_t RTS();  uint8_t RTI();
 
+    // --- Інструкції процесора Умовні переходи ---
+    uint8_t BCC();  uint8_t BCS();  uint8_t BEQ();  uint8_t BMI();
+    uint8_t BNE();  uint8_t BPL();  uint8_t BVC();  uint8_t BVS();
+
 private:
     // Вказівник на головну шину
     Bus* bus = nullptr;

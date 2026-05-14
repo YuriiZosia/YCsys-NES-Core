@@ -151,6 +151,15 @@ void CPU6502::clock() {
     case 0x60: IMP(); RTS(); break; // RTS Неявна (Implied)
     case 0x40: IMP(); RTI(); break; // RTI Неявна (Implied)
 
+		// УМОВНІ ПЕРЕХОДИ (Branching) - використовують відносну адресацію (REL)
+    case 0x90: REL(); BCC(); break; // Branch on Carry Clear
+    case 0xB0: REL(); BCS(); break; // Branch on Carry Set
+    case 0xF0: REL(); BEQ(); break; // Branch on Equal (Zero Set)
+    case 0xD0: REL(); BNE(); break; // Branch on Not Equal (Zero Clear)
+    case 0x30: REL(); BMI(); break; // Branch on Minus (Negative Set)
+    case 0x10: REL(); BPL(); break; // Branch on Plus (Negative Clear)
+    case 0x50: REL(); BVC(); break; // Branch on Overflow Clear
+    case 0x70: REL(); BVS(); break; // Branch on Overflow Set
         // Якщо опкод ще не реалізований або невідомий - нічого не робимо
     default: break;
     }
