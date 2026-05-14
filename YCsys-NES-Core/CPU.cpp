@@ -146,7 +146,10 @@ void CPU6502::clock() {
     case 0x6C: IND(); JMP(); break; // JMP Indirect (з урахуванням багу!)
 
 		// JSR (Jump to Subroutine)
-    case 0x20: ABS(); JSR(); break; // JSR
+    case 0x20: ABS(); JSR(); break; // JSR Absolute
+		// RTS (Return from Subroutine) та RTI (Return from Interrupt) - не мають операндів, тому використовують режим IMP (Implied)
+    case 0x60: IMP(); RTS(); break; // RTS Неявна (Implied)
+    case 0x40: IMP(); RTI(); break; // RTI Неявна (Implied)
 
         // Якщо опкод ще не реалізований або невідомий - нічого не робимо
     default: break;
