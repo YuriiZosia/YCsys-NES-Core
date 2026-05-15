@@ -27,9 +27,9 @@ public:
     Cartridge(const std::string& sFileName);
     ~Cartridge();
 
-    // Структура для 16-байтного заголовка iNES
+    // Правильна структура 16-байтного заголовка iNES
     struct sHeader {
-        char name[3];
+        char name[4];           // 'N', 'E', 'S', '\x1A'
         uint8_t prg_rom_chunks;
         uint8_t chr_rom_chunks;
         uint8_t mapper1;
@@ -40,11 +40,12 @@ public:
         char unused[5];
     } header;
 
-    // Вектори для зберігання пам'яті програм (CPU) та графіки (PPU)
+    bool bImageValid = false; // Прапорець, щоб знати, чи успішно завантажено гру
+
+    // Вектори для зберігання пам'яті
     std::vector<uint8_t> vPRGMemory;
     std::vector<uint8_t> vCHRMemory;
 
-    // Змінні для збереження кількості банків
     uint8_t nPRGBanks = 0;
     uint8_t nCHRBanks = 0;
     uint8_t nMapperID = 0;
