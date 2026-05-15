@@ -30,6 +30,8 @@ public:
     // Підключення процесора до шини (щоб він міг читати/писати)
     void ConnectBus(Bus* nBus) { bus = nBus; }
 
+    void clock();
+
     bool debug = false;
     uint8_t  a = 0x00, x = 0x00, y = 0x00;  // Акумулятор та індексні регістри
     uint8_t stkp = 0x00;              // Вказівник стека (Stack Pointer)
@@ -147,5 +149,5 @@ private:
     void write(uint16_t addr, uint8_t data);
     uint8_t fetch();
 
-    void clock();
+    
 };

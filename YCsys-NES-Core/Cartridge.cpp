@@ -19,7 +19,7 @@
 #include "Cartridge.h"
 #include <iostream>
 
-Cartridge::Cartridge(const std::string& sFileName) {
+Cartridge::Cartridge(const std::string& sFileName) : header{ 0 } {
     // Відкриваємо файл у бінарному режимі
     std::ifstream ifs;
     ifs.open(sFileName, std::ifstream::binary);

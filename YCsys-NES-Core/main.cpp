@@ -20,22 +20,47 @@
 #include "Bus.h"
 #include "CPU.h"
 
-// Це виправить твою помилку SDL_main
 #define SDL_MAIN_HANDLED // це говорить SDL, що ми не хочемо, щоб він замінював нашу функцію main() на свою власну версію, яка викликається при запуску програми. Це корисно, коли ти хочеш мати повний контроль над точкою входу в програму і не хочеш, щоб SDL втручався в це.
 
 int main(int argc, char* argv[]) {
-    // Створюємо екземпляри твоїх систем
-    Bus nesBus;
-    CPU6502 nesCpu;
+    // 1. Створюємо шину (вона сама створить CPU всередині та підключить його)
+    Bus nes;
 
-    // З'єднуємо їх за твоїм планом
-    nesCpu.ConnectBus(&nesBus);
+    // 2. ГИДКА ПЕРЕВІРКА: Пишемо коротку програму в RAM
+    // Програма:
+    // A9 0A -> LDA #10 (Завантажити 10 в акумулятор)
+    // 69 14 -> ADC #20 (Додати 20 до акумулятора)
+    // 00    -> BRK      (Зупинка)
 
-    // Скидаємо процесор (тут спрацює твій код із Reset Vector)
-    nesCpu.reset();
+    nes.cpuRam[0x0000] = 0xA9; nes.cpuRam[0x0001] = 0x0A;
+    nes.cpuRam[0x0002] = 0x69; nes.cpuRam[0x0003] = 0x14;
+    nes.cpuRam[0x0004] = 0x00;
+
+    // 3. ВСТАНОВЛЮЄМО ВЕКТОР СКИДАННЯ
+    // Процесор при reset() читає адресу з 0xFFFC-0xFFFD.
+    // Оскільки у нас RAM дзеркалюється, ми пишемо в кінець нашої RAM.
+    nes.write(0xFFFC, 0x00); // Low Byte адреси старту (0x00)
+    nes.write(0xFFFD, 0x00); // High Byte адреси старту (0x00)
+
+    // 4. ОЖИВЛЯЄМО СИСТЕМУ
+    nes.cpu.reset();
 
     std::cout << "YCsys NES Core: System Initialized." << std::endl;
-    std::cout << "Code that works, not just exists." << std::endl;
+    std::cout << "Starting manual test: 10 + 20..." << std::endl;
+
+    // 5. ЦИКЛ ТЕСТУВАННЯ
+    // Виконаємо 20 тактів, щоб програма встигла пройти
+    for (int i = 0; i < 20; i++) {
+        nes.cpu.clock();
+
+        // Виводимо стан, коли завершується виконання поточної інструкції
+        if (nes.cpu.cycles == 0) {
+            printf("PC: %04X | A: %02X | Flags: %02X\n", nes.cpu.pc, nes.cpu.a, nes.cpu.status);
+        }
+    }
+
+    std::cout << "\nTest finished. Accumulator should be 1E (30 decimal)." << std::endl;
+    std::cout << "YCsys: Code that works, not just exists." << std::endl;
 
     return 0;
 }
