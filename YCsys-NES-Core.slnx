@@ -3,5 +3,5 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Project Path="YCsys-NES-Core/YCsys-NES-Core.vcxproj" />
+  <Project Path="YCsys-NES-Core/YCsys-NES-Core.vcxproj" Id="83179699-176b-4177-ba62-1abc9410a6fd" />
 </Solution>

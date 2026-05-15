@@ -33,7 +33,7 @@ public:
         a = x = y = 0x00;
         stkp = 0xFD;
         status = 0x00 | FLAGS6502::U; // Встановлюємо прапорець U (завжди 1)
-        pc = read(0xFFFC) | (read(0xFFFD) << 8); // Читаємо адресу початку виконання з 0xFFFC/0xFFFD
+        pc = read(0xFFFC) | (read(0xFFFD) << 8); // Читаємо адреси з 0xFFFC/0xFFFD. Ці дві клітинки пам'яті називаються Reset Vector (Вектор скидання).
     }
 
     // Прапорці статусу (Status Flags) - C Z I D B U V N
