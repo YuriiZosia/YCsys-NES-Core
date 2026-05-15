@@ -13,7 +13,7 @@ public:
     ~CPU6502();
 
     // Підключення процесора до шини (щоб він міг читати/писати)
-    void ConnectBus(Bus* n) { bus = n; }
+    void ConnectBus(Bus* nBus) { bus = nBus; }
 
     bool debug = false;
     uint8_t  a = 0x00, x = 0x00, y = 0x00;  // Акумулятор та індексні регістри
