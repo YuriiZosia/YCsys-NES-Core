@@ -16,9 +16,10 @@ public: // Пристрої на шині
     CPU6502 cpu;
 
     // Оперативна пам'ять NES (2KB)
-    std::array<uint8_t, 2048> cpuRam = { 0 };
+    std::array<uint8_t, 2048> cpuRam;
+	
 
-public: // Читання та запис
+    public: // Читання та запис
     void write(uint16_t addr, uint8_t data);
     uint8_t read(uint16_t addr, bool bReadOnly = false);
 };
