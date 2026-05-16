@@ -1118,7 +1118,9 @@ uint8_t CPU6502::PLA() {
 uint8_t CPU6502::PLP() {
     stkp++;
     status = read(0x0100 + stkp);
-    status |= FLAGS6502::U; // Прапорець Unused завжди 1
+    // Встановлюємо біт U в 1, а біт B скидаємо в 0 за допомогою маски
+	// це виправлення бо у тесті у мене вийшло P:FF, а має бути P:EF, тобто B=0, U=1
+    status = (status | FLAGS6502::U) & ~FLAGS6502::B;
     return 0;
 }
 
