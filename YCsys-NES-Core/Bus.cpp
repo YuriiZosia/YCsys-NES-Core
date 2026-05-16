@@ -19,8 +19,7 @@
 #include "Bus.h"
 
 Bus::Bus() : cpuRam{ 0 } { //забиваємо cpuRam нулями при створенні об'єкта Bus
-    // Підключаємо CPU до цієї шини при створенні
-	cpu.ConnectBus(this);
+    cpu.ConnectBus(this);
 
     // Очищуємо оперативну пам'ять
     for (auto& i : cpuRam) i = 0x00;
@@ -28,9 +27,18 @@ Bus::Bus() : cpuRam{ 0 } { //забиваємо cpuRam нулями при ст�
 
 Bus::~Bus() {}
 
+void Bus::insertCartridge(const std::shared_ptr<Cartridge>& cartridge) {
+    // Фізично "вставляємо" касету в гніздо (підключаємо вказівник)
+    this->cart = cartridge;
+}
+
 void Bus::write(uint16_t addr, uint8_t data) {
-    // Перевіряємо, чи запис іде в діапазон RAM (0x0000 - 0x1FFF)
-    if (addr >= 0x0000 && addr <= 0x1FFF) {
+    // 1. Спочатку питаємо картридж (можливо, це команда для мапера)
+    if (cart && cart->cpuWrite(addr, data)) {
+        // Картридж обробив запис, нічого не робимо
+    }
+    // 2. Якщо картридж відхилив, перевіряємо нашу оперативну пам'ять
+    else if (addr >= 0x0000 && addr <= 0x1FFF) {
         // Маска 0x07FF реалізує дзеркалювання 2КБ оперативної пам'яті
         cpuRam[addr & 0x07FF] = data;
     }
@@ -39,7 +47,12 @@ void Bus::write(uint16_t addr, uint8_t data) {
 uint8_t Bus::read(uint16_t addr, bool bReadOnly) {
     uint8_t data = 0x00;
 
-    if (addr >= 0x0000 && addr <= 0x1FFF) {
+    // 1. Спочатку питаємо картридж (чи є там ROM за цією адресою?)
+    if (cart && cart->cpuRead(addr, data)) {
+        // Картридж знайшов дані і вже поклав їх у змінну data
+    }
+    // 2. Якщо картридж не знає цю адресу, дивимося в оперативку
+    else if (addr >= 0x0000 && addr <= 0x1FFF) {
         // Читаємо з RAM з урахуванням дзеркалювання
         data = cpuRam[addr & 0x07FF];
     }

@@ -21,13 +21,22 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include <memory>
+#include "Mapper_000.h"
 
 class Cartridge {
 public:
     Cartridge(const std::string& sFileName);
     ~Cartridge();
 
-    // Правильна структура 16-байтного заголовка iNES
+    // Зв'язок з головною шиною (Bus)
+    bool cpuRead(uint16_t addr, uint8_t& data);
+    bool cpuWrite(uint16_t addr, uint8_t data);
+
+    // Зв'язок з відеошиною (PPU)
+    bool ppuRead(uint16_t addr, uint8_t& data);
+    bool ppuWrite(uint16_t addr, uint8_t data);
+
     struct sHeader {
         char name[4];           // 'N', 'E', 'S', '\x1A'
         uint8_t prg_rom_chunks;
@@ -40,13 +49,16 @@ public:
         char unused[5];
     } header;
 
-    bool bImageValid = false; // Прапорець, щоб знати, чи успішно завантажено гру
+    bool bImageValid = false;
 
-    // Вектори для зберігання пам'яті
+private:
     std::vector<uint8_t> vPRGMemory;
     std::vector<uint8_t> vCHRMemory;
 
     uint8_t nPRGBanks = 0;
     uint8_t nCHRBanks = 0;
     uint8_t nMapperID = 0;
+
+    // Вказівник на наш мапер
+    std::shared_ptr<Mapper> pMapper;
 };
