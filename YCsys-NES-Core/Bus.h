@@ -22,6 +22,7 @@
 #include <memory>
 #include "CPU.h"
 #include "Cartridge.h"
+#include "PPU.h"
 
 class Bus {
 public:
@@ -31,6 +32,7 @@ public:
 public: // Пристрої на шині
     CPU6502 cpu;
     std::array<uint8_t, 2048> cpuRam;
+    PPU ppu;
 
     // Вказівник на підключений картридж
     std::shared_ptr<Cartridge> cart;
