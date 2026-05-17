@@ -15,3 +15,45 @@
  * |_________________________________________________________________________|
  * [TV ]        [VRAM]        [PAL]        [SPR]        [TV ]
  */
+
+#include "PPU.h"
+
+PPU::PPU() {}
+PPU::~PPU() {}
+
+// Читання регістрів з боку CPU (адреси $2000-$2007)
+uint8_t PPU::cpuRead(uint16_t addr, bool rdonly) {
+    uint8_t data = 0x00;
+    // Заглушка. Логіку 8 регістрів (PPUCTRL, PPUSTATUS тощо) мала бути тут
+    return data;
+}
+
+// Запис в регістри з боку CPU (адреси $2000-$2007)
+void PPU::cpuWrite(uint16_t addr, uint8_t data) {
+    // Заглушка
+}
+
+// Читання на власній шині PPU
+uint8_t PPU::ppuRead(uint16_t addr, bool rdonly) {
+    uint8_t data = 0x00;
+    addr &= 0x3FFF; // Адресний простір PPU обмежений 16 КБ (0x0000 - 0x3FFF)
+
+    // 1. Спочатку питаємо картридж (графіка CHR ROM/RAM)
+    if (cart && cart->ppuRead(addr, data)) {
+        // Картридж обробив запит (дані вже в data)
+    }
+	// Логіку читання VRAM та Палітр мала бути тут
+
+
+    return data;
+}
+
+// Запис на власній шині PPU
+void PPU::ppuWrite(uint16_t addr, uint8_t data) {
+    addr &= 0x3FFF;
+
+    if (cart && cart->ppuWrite(addr, data)) {
+        // Картридж обробив запис (якщо це CHR RAM)
+    }
+    // Логіку запису VRAM та Палітр мала бути тут
+}

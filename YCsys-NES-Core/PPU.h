@@ -15,4 +15,35 @@
  * |_________________________________________________________________________|
  * [TV ]        [VRAM]        [PAL]        [SPR]        [TV ]
  */
+
 #pragma once
+#include <cstdint>
+#include <array>
+#include <memory>
+#include "Cartridge.h"
+
+class PPU {
+public:
+    PPU();
+    ~PPU();
+
+    // Підключення картриджа (використовуємо такий самий shared_ptr, як у Bus)
+    void ConnectCartridge(const std::shared_ptr<Cartridge>& cartridge) { cart = cartridge; }
+
+    // --- Зв'язок з головною шиною (CPU Bus) ---
+    uint8_t cpuRead(uint16_t addr, bool rdonly = false);
+    void cpuWrite(uint16_t addr, uint8_t data);
+
+    // --- Власна шина PPU (PPU Bus) ---
+    uint8_t ppuRead(uint16_t addr, bool rdonly = false);
+    void ppuWrite(uint16_t addr, uint8_t data);
+
+private:
+    std::shared_ptr<Cartridge> cart; // Розумний вказівник на картридж
+
+    // VRAM (Nametables) - 2 таблиці по 1024 байти (для фону)
+    std::array<std::array<uint8_t, 1024>, 2> tblName;
+
+    // Палітри (Palettes) - 32 байти
+    std::array<uint8_t, 32> tblPalette;
+};
