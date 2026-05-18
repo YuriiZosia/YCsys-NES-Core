@@ -114,10 +114,37 @@ void PPU::cpuWrite(uint16_t addr, uint8_t data) {
 // =========================================================================
 uint8_t PPU::ppuRead(uint16_t addr, bool rdonly) {
     uint8_t data = 0x00;
-    addr &= 0x3FFF;
+    addr &= 0x3FFF; // Обмежуємо адресу діапазоном PPU (16 КБ)
 
+    // 1. Читання графіки (CHR ROM/RAM) з картриджа
     if (cart && cart->ppuRead(addr, data)) {
-        // Картридж успішно обробив запит (дані з CHR-ROM/RAM зчитано у data)
+        // Картридж успішно обробив адресу (0x0000 - 0x1FFF)
+    }
+    // 2. Читання VRAM (Nametables / Таблиці імен)
+    else if (addr >= 0x2000 && addr <= 0x3EFF) {
+        addr &= 0x0FFF; // Залишаємо адресу в межах 4 КБ
+
+        // Тимчасова реалізація вертикального віддзеркалення (Vertical Mirroring)
+        if (addr >= 0x0000 && addr <= 0x03FF)
+            data = tblName[0][addr & 0x03FF];
+        else if (addr >= 0x0400 && addr <= 0x07FF)
+            data = tblName[1][addr & 0x03FF];
+        else if (addr >= 0x0800 && addr <= 0x0BFF)
+            data = tblName[0][addr & 0x03FF];
+        else if (addr >= 0x0C00 && addr <= 0x0FFF)
+            data = tblName[1][addr & 0x03FF];
+    }
+    // 3. Читання Палітр (Кольори)
+    else if (addr >= 0x3F00 && addr <= 0x3FFF) {
+        addr &= 0x001F; // Палітра займає лише 32 байти
+
+        // Відтворюємо апаратне віддзеркалення прозорих кольорів спрайтів на фон
+        if (addr == 0x0010) addr = 0x0000;
+        if (addr == 0x0014) addr = 0x0004;
+        if (addr == 0x0018) addr = 0x0008;
+        if (addr == 0x001C) addr = 0x000C;
+
+        data = tblPalette[addr];
     }
 
     return data;
@@ -129,7 +156,34 @@ uint8_t PPU::ppuRead(uint16_t addr, bool rdonly) {
 void PPU::ppuWrite(uint16_t addr, uint8_t data) {
     addr &= 0x3FFF;
 
+    // 1. Запис графіки (CHR RAM) на картридж
     if (cart && cart->ppuWrite(addr, data)) {
-        // Картридж успішно обробив запис (якщо плата підтримує CHR-RAM)
+        // Картридж обробив адресу
+    }
+    // 2. Запис у VRAM (Nametables / Таблиці імен)
+    else if (addr >= 0x2000 && addr <= 0x3EFF) {
+        addr &= 0x0FFF;
+
+        // Тимчасова реалізація вертикального віддзеркалення (Vertical Mirroring)
+        if (addr >= 0x0000 && addr <= 0x03FF)
+            tblName[0][addr & 0x03FF] = data;
+        else if (addr >= 0x0400 && addr <= 0x07FF)
+            tblName[1][addr & 0x03FF] = data;
+        else if (addr >= 0x0800 && addr <= 0x0BFF)
+            tblName[0][addr & 0x03FF] = data;
+        else if (addr >= 0x0C00 && addr <= 0x0FFF)
+            tblName[1][addr & 0x03FF] = data;
+    }
+    // 3. Запис Палітр (Кольори)
+    else if (addr >= 0x3F00 && addr <= 0x3FFF) {
+        addr &= 0x001F;
+
+        // Апаратне віддзеркалення прозорих кольорів
+        if (addr == 0x0010) addr = 0x0000;
+        if (addr == 0x0014) addr = 0x0004;
+        if (addr == 0x0018) addr = 0x0008;
+        if (addr == 0x001C) addr = 0x000C;
+
+        tblPalette[addr] = data;
     }
 }
