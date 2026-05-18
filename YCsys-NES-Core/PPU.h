@@ -42,8 +42,18 @@ private:
     std::shared_ptr<Cartridge> cart; // Розумний вказівник на картридж
 
     // VRAM (Nametables) - 2 таблиці по 1024 байти (для фону)
-    std::array<std::array<uint8_t, 1024>, 2> tblName;
+    std::array<std::array<uint8_t, 1024>, 2> tblName{};
 
     // Палітри (Palettes) - 32 байти
-    std::array<uint8_t, 32> tblPalette;
+    std::array<uint8_t, 32> tblPalette{};
+
+private: 
+    // --- Регістри стану PPU (Нові змінні) ---
+    uint8_t control = 0x00;         // $2000 - PPUCTRL (Налаштування генерації NMI, розміру спрайтів тощо)
+    uint8_t mask = 0x00;            // $2001 - PPUMASK (Керування рендером фону, спрайтів, кольоровими ефектами)
+    uint8_t status = 0x00;          // $2002 - PPUSTATUS (Прапорці VBlank, Спрайт 0, Переповнення спрайтів)
+
+    uint16_t vram_addr = 0x0000;    // Поточна 14-бітна адреса у відеопам'яті PPU (VRAM Pointer)
+    uint8_t address_latch = 0;      // Адресний тригер: 0 = чекаємо старший байт, 1 = чекаємо молодший байт
+    uint8_t ppu_data_buffer = 0x00; // Внутрішній буфер затримки читання для регістра PPUDATA ($2007)
 };
