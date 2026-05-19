@@ -30,6 +30,7 @@ void PPU::clock() {
     if (scanline == -1 && cycle == 1) {
         bSpriteZeroHitPossible = false; // Скидаємо прапорець можливості Sprite Zero Hit на початку кадру
 		status &= ~0x40; // Скидаємо біт Sprite Zero Hit у статусі
+        status &= ~0x20; // Скидаємо біт Sprite Overflow на початку кадру
 	}
 
 	// =====================================================================
@@ -141,7 +142,13 @@ void PPU::clock() {
                 sprite_count++;
             }
             nOAMEntry++;
-        }
+		}
+        
+        // Якщо більше 8 спрайтів на рядку - встановлюємо біт переповнення спрайтів
+        if (sprite_count > 8) {
+            sprite_count = 8; // Обмежуємо до 8 спрайтів, які можна відобразити
+            status |= 0x20; // Встановлюємо біт Sprite Overflow у статусі
+		}
     }
 
     // =====================================================================
@@ -169,7 +176,7 @@ void PPU::clock() {
         // --- Отримуємо піксель СПРАЙТУ ---
         bool bSpriteZeroBeingRendered = false;
         if (mask & 0x10) {
-            for (uint8_t i = 0; i < sprite_count; i++) {
+            for (uint8_t i = 0; i < sprite_count && i < 8; i++) {
                 if (spriteScanline[i].x == 0) {
                     uint8_t pixel_lo = (sprite_shifter_pattern_lo[i] & 0x80) > 0;
                     uint8_t pixel_hi = (sprite_shifter_pattern_hi[i] & 0x80) > 0;
@@ -232,7 +239,7 @@ void PPU::clock() {
 
         // --- Зсув таймерів Х для спрайтів ---
         if (mask & 0x10) {
-            for (uint8_t i = 0; i < sprite_count; i++) {
+            for (uint8_t i = 0; i < sprite_count && i < 8; i++) {
                 if (spriteScanline[i].x > 0) {
                     spriteScanline[i].x--;
                 }
