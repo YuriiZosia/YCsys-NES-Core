@@ -36,6 +36,19 @@ void Bus::insertCartridge(const std::shared_ptr<Cartridge>& cartridge) {
     ppu.ConnectCartridge(cartridge);
 }
 
+void Bus::clock() {
+    // PPU - найшвидший компонент на платі. Він робить один крок КОЖЕН системний такт.
+    ppu.clock();
+
+    // CPU працює в 3 рази повільніше. Він робить крок лише кожен третій системний такт.
+    if (nSystemClockCounter % 3 == 0) {
+        cpu.clock();
+    }
+
+    // Збільшуємо глобальний лічильник часу
+    nSystemClockCounter++;
+}
+
 void Bus::write(uint16_t addr, uint8_t data) {
     // 1. Спочатку питаємо картридж (можливо, це команда перемикання банків для мапера)
     if (cart && cart->cpuWrite(addr, data)) {

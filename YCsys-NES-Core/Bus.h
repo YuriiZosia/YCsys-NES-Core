@@ -29,6 +29,8 @@ public:
     Bus();
     ~Bus();
 
+    void clock(); // Головний системний такт
+
 public: // Пристрої на шині
     CPU6502 cpu;
     std::array<uint8_t, 2048> cpuRam;
@@ -44,4 +46,7 @@ public: // Управління системою
 public: // Читання та запис
     void write(uint16_t addr, uint8_t data);
     uint8_t read(uint16_t addr, bool bReadOnly = false);
+
+private:
+    uint32_t nSystemClockCounter = 0; // Лічильник тактів
 };

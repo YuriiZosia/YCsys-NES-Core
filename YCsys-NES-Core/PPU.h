@@ -27,6 +27,8 @@ public:
     PPU();
     ~PPU();
 
+	void clock(); // Головний такт PPU (генерація пікселів, скролінг, VBlank)
+
     // Підключення картриджа (використовуємо такий самий shared_ptr, як у Bus)
     void ConnectCartridge(const std::shared_ptr<Cartridge>& cartridge) { cart = cartridge; }
 
