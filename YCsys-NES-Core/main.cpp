@@ -17,6 +17,7 @@
  */
 
 #include <iostream>
+#include <windows.h>
 #pragma warning(push)
 #pragma warning(disable: 26819) // Вимикаємо попередження про fallthrough
 #pragma warning(disable: 26451) // Вимикаємо попередження про переповнення для SDL
@@ -28,6 +29,10 @@
 const int SCALE = 3;
 
 int main(int argc, char* argv[]) {
+    // Встановлюємо кодування UTF-8 для консолі Windows, щоб бачити українську мову
+    SetConsoleOutputCP(CP_UTF8);
+    SetConsoleCP(CP_UTF8);
+
     // 1. Ініціалізація підсистеми відео SDL2
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
         std::cerr << "SDL Initialization Error: " << SDL_GetError() << std::endl;
