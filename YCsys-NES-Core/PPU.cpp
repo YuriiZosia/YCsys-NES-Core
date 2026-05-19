@@ -25,6 +25,16 @@ PPU::~PPU() {}
 // ГОЛОВНИЙ ЦИКЛ PPU (Генератор таймінгів екрану та рендеринг)
 // =========================================================================
 void PPU::clock() {
+
+	// потрібно додати скидання Sprite Zero Hit на початку кадру, щоб уникнути помилкових спрацьовувань
+    if (scanline == -1 && cycle == 1) {
+        bSpriteZeroHitPossible = false; // Скидаємо прапорець можливості Sprite Zero Hit на початку кадру
+		status &= ~0x40; // Скидаємо біт Sprite Zero Hit у статусі
+	}
+
+	// =====================================================================
+	// 1. ПАЙПЛАЙН ЧИТАННЯ (Fetch Pipeline) та 2. СИНХРОНІЗАЦІЯ РЯДКІВ (Скролінг)
+	// =====================================================================
     if (scanline >= -1 && scanline < 240) {
 
         // --- 1. ПАЙПЛАЙН ЧИТАННЯ (Fetch Pipeline) ---
@@ -78,15 +88,75 @@ void PPU::clock() {
     }
 
     // =====================================================================
-    // 3. РЕНДЕРИНГ ПІКСЕЛЯ 
+    // 3. ОЦІНКА СПРАЙТІВ (Виконується в кінці видимого рядка)
+    // =====================================================================
+    if (cycle == 257 && scanline >= 0 && scanline < 240) {
+        // Очищаємо дані з попереднього рядка
+        sprite_count = 0;
+        for (int i = 0; i < 8; i++) {
+            sprite_shifter_pattern_lo[i] = 0;
+            sprite_shifter_pattern_hi[i] = 0;
+        }
+
+        uint8_t nOAMEntry = 0;
+        bSpriteZeroHitPossible = false;
+
+        while (nOAMEntry < 64 && sprite_count < 9) {
+            int16_t diff = static_cast<int16_t>(scanline) - static_cast<int16_t>(OAM[nOAMEntry].y);
+
+            // Якщо спрайт перетинає наш рядок (висота 8 пікселів)
+            if (diff >= 0 && diff < 8) {
+                if (sprite_count < 8) {
+                    if (nOAMEntry == 0) bSpriteZeroHitPossible = true; // Це Спрайт №0!
+
+                    spriteScanline[sprite_count] = OAM[nOAMEntry];
+
+                    uint16_t sprite_pattern_addr_lo = ((control & 0x08) ? 0x1000 : 0x0000)
+                        | (static_cast<uint16_t>(OAM[nOAMEntry].id) << 4)
+                        | static_cast<uint16_t>(diff);
+
+                    // Якщо спрайт перевернутий по вертикалі (біт 7)
+                    if (OAM[nOAMEntry].attribute & 0x80) {
+                        sprite_pattern_addr_lo = ((control & 0x08) ? 0x1000 : 0x0000)
+                            | (static_cast<uint16_t>(OAM[nOAMEntry].id) << 4)
+                            | static_cast<uint16_t>(7 - diff);
+                    }
+
+                    uint16_t sprite_pattern_addr_hi = sprite_pattern_addr_lo + 8;
+                    sprite_shifter_pattern_lo[sprite_count] = ppuRead(sprite_pattern_addr_lo);
+                    sprite_shifter_pattern_hi[sprite_count] = ppuRead(sprite_pattern_addr_hi);
+
+                    // Якщо спрайт перевернутий по горизонталі (біт 6) - дзеркалимо байти
+                    if (OAM[nOAMEntry].attribute & 0x40) {
+                        auto flipbyte = [](uint8_t b) {
+                            b = (b & 0xF0) >> 4 | (b & 0x0F) << 4;
+                            b = (b & 0xCC) >> 2 | (b & 0x33) << 2;
+                            b = (b & 0xAA) >> 1 | (b & 0x55) << 1;
+                            return b;
+                            };
+                        sprite_shifter_pattern_lo[sprite_count] = flipbyte(sprite_shifter_pattern_lo[sprite_count]);
+                        sprite_shifter_pattern_hi[sprite_count] = flipbyte(sprite_shifter_pattern_hi[sprite_count]);
+                    }
+                }
+                sprite_count++;
+            }
+            nOAMEntry++;
+        }
+    }
+
+    // =====================================================================
+    // 4. РЕНДЕРИНГ ПІКСЕЛЯ 
     // =====================================================================
     if (scanline >= 0 && scanline < 240 && cycle >= 1 && cycle <= 256) {
         uint8_t bg_pixel = 0x00;
         uint8_t bg_palette = 0x00;
+        uint8_t fg_pixel = 0x00;
+        uint8_t fg_palette = 0x00;
+        uint8_t fg_priority = 0x00;
 
+        // --- Отримуємо піксель ФОНУ ---
         if (mask & 0x08) {
             uint16_t bit_mux = 0x8000 >> fine_x;
-
             uint8_t p0_pixel = (bg_shifter_pattern_lo & bit_mux) > 0;
             uint8_t p1_pixel = (bg_shifter_pattern_hi & bit_mux) > 0;
             bg_pixel = (p1_pixel << 1) | p0_pixel;
@@ -96,22 +166,85 @@ void PPU::clock() {
             bg_palette = (bg_pal1 << 1) | bg_pal0;
         }
 
-        // Якщо малювання фону вимкнено або піксель прозорий, color_address = 0
-        uint8_t color_address = 0x00;
-        if (bg_pixel != 0x00) {
-            color_address = (bg_palette << 2) | bg_pixel;
+        // --- Отримуємо піксель СПРАЙТУ ---
+        bool bSpriteZeroBeingRendered = false;
+        if (mask & 0x10) {
+            for (uint8_t i = 0; i < sprite_count; i++) {
+                if (spriteScanline[i].x == 0) {
+                    uint8_t pixel_lo = (sprite_shifter_pattern_lo[i] & 0x80) > 0;
+                    uint8_t pixel_hi = (sprite_shifter_pattern_hi[i] & 0x80) > 0;
+                    fg_pixel = (pixel_hi << 1) | pixel_lo;
+
+                    fg_palette = (spriteScanline[i].attribute & 0x03) + 0x04; // Спрайти використовують палітри 4-7
+                    fg_priority = (spriteScanline[i].attribute & 0x20) == 0;  // 0 = поверх фону
+
+                    if (fg_pixel != 0) {
+                        if (i == 0) bSpriteZeroBeingRendered = true;
+                        break; // Малюємо лише верхній спрайт, інші перекриваються
+                    }
+                }
+            }
         }
 
-        // Читаємо фінальний індекс кольору з пам'яті PPU ($3F00)
+        // --- МУЛЬТИПЛЕКСОР (Хто перемагає на екрані?) ---
+        uint8_t final_pixel = 0x00;
+        uint8_t final_palette = 0x00;
+
+        if (bg_pixel == 0 && fg_pixel > 0) {
+            final_pixel = fg_pixel;
+            final_palette = fg_palette;
+        }
+        else if (bg_pixel > 0 && fg_pixel == 0) {
+            final_pixel = bg_pixel;
+            final_palette = bg_palette;
+        }
+        else if (bg_pixel > 0 && fg_pixel > 0) {
+            if (fg_priority) {
+                final_pixel = fg_pixel;
+                final_palette = fg_palette;
+            }
+            else {
+                final_pixel = bg_pixel;
+                final_palette = bg_palette;
+            }
+
+            // Детекція Sprite 0 Hit (колізія)
+            if (bSpriteZeroHitPossible && bSpriteZeroBeingRendered) {
+                if ((mask & 0x08) && (mask & 0x10)) {
+                    // Перевірка маскування лівого краю (8 пікселів)
+                    if (!(cycle >= 1 && cycle < 9 && !(mask & 0x02 || mask & 0x04))) {
+                        status |= 0x40; // Встановлюємо 6-й біт у $2002
+                    }
+                }
+            }
+        }
+
+        // --- Вивід фінального кольору ---
+        uint8_t color_address = 0x00;
+        if (final_pixel != 0x00) {
+            color_address = (final_palette << 2) | final_pixel;
+        }
         uint8_t color_index = ppuRead(0x3F00 + color_address) & 0x3F;
 
-        // БЕЗПЕЧНИЙ ЗАПИС У ВІДЕОБУФЕР (з кастуванням size_t!)
-        // Явно переводимо обидві координати в size_t, щоб аналізатор спав спокійно
+        // БЕЗПЕЧНИЙ ЗАПИС У МАСИВ!
         size_t pixel_index = (static_cast<size_t>(scanline) * 256) + static_cast<size_t>(cycle - 1);
         sprScreen[pixel_index] = palScreen[color_index];
+
+        // --- Зсув таймерів Х для спрайтів ---
+        if (mask & 0x10) {
+            for (uint8_t i = 0; i < sprite_count; i++) {
+                if (spriteScanline[i].x > 0) {
+                    spriteScanline[i].x--;
+                }
+                else {
+                    sprite_shifter_pattern_lo[i] <<= 1;
+                    sprite_shifter_pattern_hi[i] <<= 1;
+                }
+            }
+        }
     }
 
-    // --- Емуляція ходу променя екрану ---
+    // Емуляція ходу променя екрану
     cycle++;
     if (cycle >= 341) {
         cycle = 0;
@@ -121,7 +254,8 @@ void PPU::clock() {
             frame_complete = true;
         }
     }
-}
+
+} // Кінець функції clock()
 
 // =========================================================================
 // ДОПОМІЖНІ ФУНКЦІЇ ПАЙПЛАЙНУ ТА СКРОЛІНГУ
@@ -214,6 +348,7 @@ uint8_t PPU::cpuRead(uint16_t addr, bool rdonly) {
     case 0x0003: // $2003 - OAMADDR
         break;
     case 0x0004: // $2004 - OAMDATA
+        data = reinterpret_cast<uint8_t*>(OAM.data())[oam_addr];
         break;
     case 0x0005: // $2005 - PPUSCROLL (Тільки для запису)
         break;
@@ -253,8 +388,11 @@ void PPU::cpuWrite(uint16_t addr, uint8_t data) {
     case 0x0002: // $2002 - PPUSTATUS (Тільки для читання)
         break;
     case 0x0003: // $2003 - OAMADDR
+        oam_addr = data;
         break;
     case 0x0004: // $2004 - OAMDATA
+        reinterpret_cast<uint8_t*>(OAM.data())[oam_addr] = data;
+        oam_addr++;
         break;
     case 0x0005: // $2005 - PPUSCROLL
         if (address_latch == 0) {

@@ -57,6 +57,28 @@ public: // --- Графічний вивід та синхронізація к�
         0xFFCCD278, 0xFFB4DE78, 0xFFA8E290, 0xFF98E2B4, 0xFFA0D6E4, 0xFFA0A2A0, 0xFF000000, 0xFF000000
     };
 
+    public:
+    // Структура одного спрайта (4 байти OAM)
+    struct sObjectAttributeEntry {
+        uint8_t y;         // Y координата
+        uint8_t id;        // Номер тайлу в таблиці шаблонів (Pattern Table)
+        uint8_t attribute; // Прапорці (палітра, віддзеркалення, пріоритет)
+        uint8_t x;         // X координата
+    };
+    
+    // Пам'ять OAM на 64 спрайти (безпечний масив)
+    std::array<sObjectAttributeEntry, 64> OAM{};
+    uint8_t oam_addr = 0x00; // Регістр адреси OAM ($2003)
+
+private: // --- Внутрішні буфери рендерингу спрайтів ---
+    // Масиви для зберігання до 8 спрайтів, знайдених на поточному рядку
+    std::array<sObjectAttributeEntry, 8> spriteScanline{};
+    uint8_t sprite_count = 0;
+    
+    std::array<uint8_t, 8> sprite_shifter_pattern_lo{};
+    std::array<uint8_t, 8> sprite_shifter_pattern_hi{};
+    
+    bool bSpriteZeroHitPossible = false;
 
 private: // --- Пайплайн рендерингу (Fetch Pipeline) ---
     uint8_t bg_next_tile_id = 0x00;
