@@ -51,6 +51,16 @@ public:
 
     bool bImageValid = false;
 
+    // Режими віддзеркалення (використовуємо безпечний enum class)
+    enum class MIRROR {
+        HORIZONTAL,
+        VERTICAL,
+        ONESCREEN_LO,
+        ONESCREEN_HI
+    };
+
+    MIRROR mirror = MIRROR::HORIZONTAL;
+
 private:
     std::vector<uint8_t> vPRGMemory;
     std::vector<uint8_t> vCHRMemory;

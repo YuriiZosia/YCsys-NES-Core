@@ -444,15 +444,31 @@ uint8_t PPU::ppuRead(uint16_t addr, bool rdonly) {
     else if (addr >= 0x2000 && addr <= 0x3EFF) {
         addr &= 0x0FFF; // Залишаємо адресу в межах 4 КБ
 
-        // Тимчасова реалізація вертикального віддзеркалення (Vertical Mirroring)
-        if (addr >= 0x0000 && addr <= 0x03FF)
-            data = tblName[0][addr & 0x03FF];
-        else if (addr >= 0x0400 && addr <= 0x07FF)
-            data = tblName[1][addr & 0x03FF];
-        else if (addr >= 0x0800 && addr <= 0x0BFF)
-            data = tblName[0][addr & 0x03FF];
-        else if (addr >= 0x0C00 && addr <= 0x0FFF)
-            data = tblName[1][addr & 0x03FF];
+        // Захист: якщо картридж не підключено, використовуємо Вертикальне за замовчуванням
+        Cartridge::MIRROR current_mirror = cart ? cart->mirror : Cartridge::MIRROR::VERTICAL;
+
+        if (current_mirror == Cartridge::MIRROR::VERTICAL) {
+            // Вертикальне віддзеркалення (A B A B)
+            if (addr >= 0x0000 && addr <= 0x03FF)
+                data = tblName[0][addr & 0x03FF];
+            else if (addr >= 0x0400 && addr <= 0x07FF)
+                data = tblName[1][addr & 0x03FF];
+            else if (addr >= 0x0800 && addr <= 0x0BFF)
+                data = tblName[0][addr & 0x03FF];
+            else if (addr >= 0x0C00 && addr <= 0x0FFF)
+                data = tblName[1][addr & 0x03FF];
+        }
+        else if (current_mirror == Cartridge::MIRROR::HORIZONTAL) {
+            // Горизонтальне віддзеркалення (A A B B)
+            if (addr >= 0x0000 && addr <= 0x03FF)
+                data = tblName[0][addr & 0x03FF];
+            else if (addr >= 0x0400 && addr <= 0x07FF)
+                data = tblName[0][addr & 0x03FF];
+            else if (addr >= 0x0800 && addr <= 0x0BFF)
+                data = tblName[1][addr & 0x03FF];
+            else if (addr >= 0x0C00 && addr <= 0x0FFF)
+                data = tblName[1][addr & 0x03FF];
+        }
     }
     // 3. Читання Палітр (Кольори)
     else if (addr >= 0x3F00 && addr <= 0x3FFF) {
@@ -484,15 +500,28 @@ void PPU::ppuWrite(uint16_t addr, uint8_t data) {
     else if (addr >= 0x2000 && addr <= 0x3EFF) {
         addr &= 0x0FFF;
 
-        // Тимчасова реалізація вертикального віддзеркалення (Vertical Mirroring)
-        if (addr >= 0x0000 && addr <= 0x03FF)
-            tblName[0][addr & 0x03FF] = data;
-        else if (addr >= 0x0400 && addr <= 0x07FF)
-            tblName[1][addr & 0x03FF] = data;
-        else if (addr >= 0x0800 && addr <= 0x0BFF)
-            tblName[0][addr & 0x03FF] = data;
-        else if (addr >= 0x0C00 && addr <= 0x0FFF)
-            tblName[1][addr & 0x03FF] = data;
+        Cartridge::MIRROR current_mirror = cart ? cart->mirror : Cartridge::MIRROR::VERTICAL;
+
+        if (current_mirror == Cartridge::MIRROR::VERTICAL) {
+            if (addr >= 0x0000 && addr <= 0x03FF)
+                tblName[0][addr & 0x03FF] = data;
+            else if (addr >= 0x0400 && addr <= 0x07FF)
+                tblName[1][addr & 0x03FF] = data;
+            else if (addr >= 0x0800 && addr <= 0x0BFF)
+                tblName[0][addr & 0x03FF] = data;
+            else if (addr >= 0x0C00 && addr <= 0x0FFF)
+                tblName[1][addr & 0x03FF] = data;
+        }
+        else if (current_mirror == Cartridge::MIRROR::HORIZONTAL) {
+            if (addr >= 0x0000 && addr <= 0x03FF)
+                tblName[0][addr & 0x03FF] = data;
+            else if (addr >= 0x0400 && addr <= 0x07FF)
+                tblName[0][addr & 0x03FF] = data;
+            else if (addr >= 0x0800 && addr <= 0x0BFF)
+                tblName[1][addr & 0x03FF] = data;
+            else if (addr >= 0x0C00 && addr <= 0x0FFF)
+                tblName[1][addr & 0x03FF] = data;
+        }
     }
     // 3. Запис Палітр (Кольори)
     else if (addr >= 0x3F00 && addr <= 0x3FFF) {

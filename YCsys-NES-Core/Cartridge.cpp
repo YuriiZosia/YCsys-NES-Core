@@ -49,6 +49,9 @@ Cartridge::Cartridge(const std::string& sFileName) : header{ 0 } {
         // і склеюємо їх у повноцінне 8-бітне число.
         nMapperID = ((header.mapper2 >> 4) << 4) | (header.mapper1 >> 4);
 
+        // Визначаємо тип віддзеркалення (біт 0 регістра mapper1)
+        mirror = (header.mapper1 & 0x01) ? MIRROR::VERTICAL : MIRROR::HORIZONTAL;
+
         // 5. Витягуємо кількість банків пам'яті
         nPRGBanks = header.prg_rom_chunks; // Банки програмного коду
         nCHRBanks = header.chr_rom_chunks; // Банки графіки
