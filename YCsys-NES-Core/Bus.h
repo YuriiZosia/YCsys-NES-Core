@@ -36,6 +36,10 @@ public: // Пристрої на шині
     std::array<uint8_t, 2048> cpuRam;
     PPU ppu;
 
+    // Стан контролерів (Joypad 1 та Joypad 2)
+    std::array<uint8_t, 2> controller{};       // Поточний фізичний стан кнопок
+    std::array<uint8_t, 2> controller_state{}; // Зсувний регістр (заморожений стан)
+
     // Вказівник на підключений картридж
     std::shared_ptr<Cartridge> cart;
 

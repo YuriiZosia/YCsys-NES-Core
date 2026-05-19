@@ -75,6 +75,24 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // =================================================================
+        // ОПИТУВАННЯ КЛАВІАТУРИ ДЛЯ КОНТРОЛЕРА 1
+        // =================================================================
+        const Uint8* state = SDL_GetKeyboardState(NULL);
+        nes->controller[0] = 0x00; // Очищуємо старий стан
+
+        // Порядок бітів (Shift Register): A, B, Select, Start, Up, Down, Left, Right
+        nes->controller[0] |= state[SDL_SCANCODE_X] ? 0x80 : 0x00; // A
+        nes->controller[0] |= state[SDL_SCANCODE_Z] ? 0x40 : 0x00; // B
+        nes->controller[0] |= state[SDL_SCANCODE_A] ? 0x20 : 0x00; // Select
+        nes->controller[0] |= state[SDL_SCANCODE_S] ? 0x10 : 0x00; // Start
+        nes->controller[0] |= state[SDL_SCANCODE_UP] ? 0x08 : 0x00; // Up
+        nes->controller[0] |= state[SDL_SCANCODE_DOWN] ? 0x04 : 0x00; // Down
+        nes->controller[0] |= state[SDL_SCANCODE_LEFT] ? 0x02 : 0x00; // Left
+        nes->controller[0] |= state[SDL_SCANCODE_RIGHT] ? 0x01 : 0x00; // Right
+
+        // =================================================================
+
         // КРУТИМО СИСТЕМНИЙ ГОДИННИК, поки PPU не завершить рендеринг повного кадру
         while (!nes->ppu.frame_complete) {
             nes->clock();
@@ -95,6 +113,8 @@ int main(int argc, char* argv[]) {
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
+
+    delete nes; // Знищуємо об'єкт консолі.
 
     return 0;
 }

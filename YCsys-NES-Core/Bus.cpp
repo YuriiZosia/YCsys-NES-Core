@@ -64,7 +64,12 @@ void Bus::write(uint16_t addr, uint8_t data) {
         // Маска & 0x0007 відсікає дзеркалювання і видає чистий номер регістра від 0 до 7
         ppu.cpuWrite(addr & 0x0007, data);
     }
-    // Місце для майбутньої логіки запису в інші пристрої (APU, джойстики)
+    // 4. Контролери (Запис у $4016 дає команду "зафіксувати стан кнопок")
+    else if (addr == 0x4016) {
+        // Коли CPU пише сюди, ми копіюємо поточний стан обох геймпадів у зсувні регістри
+        controller_state[0] = controller[0];
+        controller_state[1] = controller[1];
+    }
 }
 
 uint8_t Bus::read(uint16_t addr, bool bReadOnly) {
@@ -84,7 +89,18 @@ uint8_t Bus::read(uint16_t addr, bool bReadOnly) {
         // Читаємо з PPU, передаючи чистий номер регістра (0-7)
         data = ppu.cpuRead(addr & 0x0007, bReadOnly);
     }
-    // Місце для майбутньої логіки читання з інших пристроїв (APU, джойстики)
+    // 4. Контролери (Читання стану по одному біту за раз)
+    else if (addr == 0x4016) {
+        // Читаємо стан контролера 1 (витягуємо старший біт, 7-й)
+        data = (controller_state[0] & 0x80) > 0 ? 1 : 0;
+        // Зсуваємо регістр, щоб наступне читання віддало наступну кнопку
+        controller_state[0] <<= 1;
+    }
+    else if (addr == 0x4017) {
+        // Читаємо стан контролера 2
+        data = (controller_state[1] & 0x80) > 0 ? 1 : 0;
+        controller_state[1] <<= 1;
+    }
 
     return data;
 }
