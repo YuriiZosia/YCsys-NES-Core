@@ -25,7 +25,22 @@ PPU::~PPU() {}
 // ГОЛОВНИЙ ЦИКЛ PPU (System Clock)
 // =========================================================================
 void PPU::clock() {
-    // Тут буде логіка генерації пікселів, скролінгу та VBlank
+    // Малюємо піксель ТІЛЬКИ якщо промінь знаходиться у видимій зоні (256x240)
+    if (scanline >= 0 && scanline < 240 && cycle >= 0 && cycle < 256) {
+        // Явно вказуємо, що математику треба робити у великому типі (size_t)
+        sprScreen[static_cast<size_t>(scanline) * 256 + cycle] = (rand() % 2 == 0) ? 0xFFFFFFFF : 0xFF000000;
+    }
+
+    cycle++;
+    if (cycle >= 341) { // Клікнули за межі правого краю екрану
+        cycle = 0;
+        scanline++;
+
+        if (scanline >= 261) { // Дійшли до кінця кадру
+            scanline = -1;     // Скидаємо на перед-рендеринговий рядок
+            frame_complete = true; // Сигнал для SDL2, що можна виводити картинку
+        }
+    }
 }
 
 // =========================================================================
@@ -99,12 +114,12 @@ void PPU::cpuWrite(uint16_t addr, uint8_t data) {
     case 0x0006: // $2006 - PPUADDR (Запис 16-бітної адреси у два етапи)
         if (address_latch == 0) {
             // Етап 1: Записуємо старший байт адреси у верхню половину vram_addr
-            vram_addr = (vram_addr & 0x00FF) | (data << 8);
+            vram_addr = (vram_addr & 0x00FF) | (static_cast<uint16_t>(data) << 8);
             address_latch = 1; // Перемикаємо тригер — наступний байт буде молодшим
         }
         else {
             // Етап 2: Записуємо молодший байт адреси у нижню половину vram_addr
-            vram_addr = (vram_addr & 0xFF00) | data;
+            vram_addr = (vram_addr & 0xFF00) | static_cast<uint16_t>(data);
             vram_addr &= 0x3FFF; // Відеопам'ять обмежена 14 бітами, маскуємо все що вище
             address_latch = 0;   // Скидаємо тригер у вихідний стан
         }

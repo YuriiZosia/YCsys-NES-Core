@@ -17,74 +17,84 @@
  */
 
 #include <iostream>
-#include <iomanip>
-#include <memory>
-#include <cstdio> // Для роботи з файлами (FILE)
+#pragma warning(push)
+#pragma warning(disable: 26819) // Вимикаємо попередження про fallthrough
+#pragma warning(disable: 26451) // Вимикаємо попередження про переповнення для SDL
+#include <SDL.h>
+#pragma warning(pop)            // Повертаємо аналізатор до звичного суворого режиму
 #include "Bus.h"
-#include "CPU.h"
-#include "Cartridge.h"
 
-// Це виправить твою помилку SDL_main
-#define SDL_MAIN_HANDLED // це говорить SDL, що ми не хочемо, щоб він замінював нашу функцію main() на свою власну версію, яка викликається при запуску програми. Це корисно, коли ти хочеш мати повний контроль над точкою входу в програму і не хочеш, щоб SDL втручався в це.
+ // Коефіцієнт масштабування вікна (оригінал 256x240 занадто малий для моніторів)
+const int SCALE = 3;
 
 int main(int argc, char* argv[]) {
-    Bus nes;
-
-    std::cout << "YCsys NES Core: System Initialized." << std::endl;
-    std::cout << "Loading nestest.nes..." << std::endl;
-
-    std::shared_ptr<Cartridge> cart = std::make_shared<Cartridge>("nestest.nes");
-
-    if (!cart->bImageValid) {
-        std::cerr << "Не вдалося завантажити nestest.nes. Перевір шлях до файлу!" << std::endl;
+    // 1. Ініціалізація підсистеми відео SDL2
+    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+        std::cerr << "SDL Initialization Error: " << SDL_GetError() << std::endl;
         return -1;
     }
 
-    nes.insertCartridge(cart);
+    // Створюємо головне вікно програми (768x720 пікселів при SCALE = 3)
+    SDL_Window* window = SDL_CreateWindow(
+        "YCsys NES Core",
+        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
+        256 * SCALE, 240 * SCALE,
+        SDL_WINDOW_SHOWN
+    );
 
-    // ОЖИВЛЯЄМО СИСТЕМУ
-    nes.cpu.reset();
-
-    // Налаштування під стандарти nestest
-    nes.cpu.pc = 0xC000;
-    nes.cpu.status = 0x24; // Встановлюємо прапорці в еталонний стартовий стан
-
-    // Відкриваємо файл для запису нашого логу
-    FILE* logfile = nullptr;
-    fopen_s(&logfile, "yc_nestest_output.log", "w");
-    if (!logfile) {
-        std::cerr << "Помилка: Не вдалося створити файл логу!" << std::endl;
+    if (!window) {
+        std::cerr << "Window Creation Error: " << SDL_GetError() << std::endl;
+        SDL_Quit();
         return -1;
     }
 
-    std::cout << "Starting nestest execution (8991 steps)..." << std::endl;
-    std::cout << "Writing to yc_nestest_output.log..." << std::endl;
+    // Створюємо апаратний рендерер із підтримкою Vertical Sync
+    SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
 
-    // ЦИКЛ ТЕСТУВАННЯ (Проходимо всі 8991 інструкцію тесту)
-    int steps = 0;
-    while (steps < 8991) {
-        if (nes.cpu.cycles == 0) {
-            // Форматуємо рядок. Точно 44 пробіли між PC та A!
-            char buffer[128];
-            sprintf_s(buffer, "%04X                                        A:%02X X:%02X Y:%02X P:%02X SP:%02X\n",
-                nes.cpu.pc, nes.cpu.a, nes.cpu.x, nes.cpu.y, nes.cpu.status, nes.cpu.stkp);
+    // Створюємо 32-бітну ARGB текстуру, куди будемо копіювати наш екранний масив
+    SDL_Texture* texture = SDL_CreateTexture(
+        renderer,
+        SDL_PIXELFORMAT_ARGB8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        256, 240
+    );
 
-            // Пишемо у файл
-            fprintf(logfile, "%s", buffer);
+    // 2. Створюємо екземпляр нашої віртуальної консолі
+    // Створюємо консоль у Купі (надійно і не грузить стек)
+    Bus* nes = new Bus();
 
-            // Для консолі виводимо лише кожен 1000-й крок, щоб показати прогрес
-            if (steps % 1000 == 0) {
-                std::cout << "Step " << steps << " completed..." << std::endl;
+    // 3. Головний ігровий та графічний цикл
+    bool bQuit = false;
+    SDL_Event event;
+
+    while (!bQuit) {
+        // Обробка системних подій ОС (закриття вікна, рух миші тощо)
+        while (SDL_PollEvent(&event)) {
+            if (event.type == SDL_QUIT) {
+                bQuit = true;
             }
-
-            steps++;
         }
-        nes.cpu.clock();
+
+        // КРУТИМО СИСТЕМНИЙ ГОДИННИК, поки PPU не завершить рендеринг повного кадру
+        while (!nes->ppu.frame_complete) {
+            nes->clock();
+        }
+        // Скидаємо прапорець завершення кадру для наступного циклу розгортки
+        nes->ppu.frame_complete = false;
+        // 4. Оновлюємо текстуру вікна даними з нашого std::array
+        SDL_UpdateTexture(texture, nullptr, nes->ppu.sprScreen.data(), 256 * sizeof(uint32_t));
+
+        // Очищуємо екран, копіюємо текстуру у вікно з масштабуванням і виводимо на монітор
+        SDL_RenderClear(renderer);
+        SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+        SDL_RenderPresent(renderer);
     }
 
-    fclose(logfile);
-    std::cout << "Test execution finished! Log saved to yc_nestest_output.log" << std::endl;
-    std::cout << "YCsys: Code that works, not just exists." << std::endl;
+    // Фінальне вивільнення ресурсів при закритті програми
+    SDL_DestroyTexture(texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
 
     return 0;
 }

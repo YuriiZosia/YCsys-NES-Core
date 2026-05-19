@@ -40,6 +40,11 @@ public:
     uint8_t ppuRead(uint16_t addr, bool rdonly = false);
     void ppuWrite(uint16_t addr, uint8_t data);
 
+public: // --- Графічний вивід та синхронізація кадрів ---
+    // Буфер екрану (256x240). Використовуємо безпечний std::array із зануленням
+    std::array<uint32_t, 256 * 240> sprScreen{};
+    bool frame_complete = false; // Сигнал для шини, що кадр повністю відмальовано
+
 private:
     std::shared_ptr<Cartridge> cart; // Розумний вказівник на картридж
 
@@ -58,4 +63,8 @@ private:
     uint16_t vram_addr = 0x0000;    // Поточна 14-бітна адреса у відеопам'яті PPU (VRAM Pointer)
     uint8_t address_latch = 0;      // Адресний тригер: 0 = чекаємо старший байт, 1 = чекаємо молодший байт
     uint8_t ppu_data_buffer = 0x00; // Внутрішній буфер затримки читання для регістра PPUDATA ($2007)
+
+private: // --- Координати віртуального променя розгортки екрану ---
+    int16_t scanline = 0; // Поточний рядок (від -1 до 260)
+    int16_t cycle = 0;    // Поточний такт/піксель у рядку (від 0 до 340)
 };
