@@ -73,20 +73,17 @@ uint8_t PPU::cpuRead(uint16_t addr, bool rdonly) {
     case 0x0006: // $2006 - PPUADDR (Тільки для запису)
         break;
     case 0x0007: // $2007 - PPUDATA
-        // Апаратна затримка: CPU отримує дані, які PPU прочитав ПІД ЧАС МИНУЛОГО ВИКЛИКУ.
+        // Апаратна затримка
         data = ppu_data_buffer;
+        ppu_data_buffer = ppuRead(v.reg);
 
-        // PPU робить упереджувальне читання з власної відеошини для наступного кроку
-        ppu_data_buffer = ppuRead(vram_addr);
-
-        // ВИНЯТОК: Палітри кольорів ($3F00 - $3FFF) підключені до PPU напряму в обхід системного
-        // буфера затримки. Якщо адреса вказує на палітру, дані повертаються негайно.
-        if (vram_addr >= 0x3F00) {
+        // ВИНЯТОК: Палітри кольорів ($3F00 - $3FFF) читаються без затримки
+        if (v.reg >= 0x3F00) {
             data = ppu_data_buffer;
         }
 
-        // Автоматичний інкремент адреси після кожного звернення до пам'яті
-        vram_addr++;
+        // Інкремент адреси залежить від біта 2 регістра PPUCTRL
+        v.reg += (control & 0x04) ? 32 : 1;
         break;
     }
     return data;
@@ -99,6 +96,9 @@ void PPU::cpuWrite(uint16_t addr, uint8_t data) {
     switch (addr) {
     case 0x0000: // $2000 - PPUCTRL
         control = data;
+        // Нижні 2 біти PPUCTRL вказують на стартову таблицю імен (екран)
+        t.nametable_x = control & 0x01;
+        t.nametable_y = (control & 0x02) >> 1;
         break;
     case 0x0001: // $2001 - PPUMASK
         mask = data;
@@ -110,23 +110,36 @@ void PPU::cpuWrite(uint16_t addr, uint8_t data) {
     case 0x0004: // $2004 - OAMDATA
         break;
     case 0x0005: // $2005 - PPUSCROLL
-        break;
-    case 0x0006: // $2006 - PPUADDR (Запис 16-бітної адреси у два етапи)
         if (address_latch == 0) {
-            // Етап 1: Записуємо старший байт адреси у верхню половину vram_addr
-            vram_addr = (vram_addr & 0x00FF) | (static_cast<uint16_t>(data) << 8);
-            address_latch = 1; // Перемикаємо тригер — наступний байт буде молодшим
+            // Перший запис: X зміщення
+            fine_x = data & 0x07;       // Молодші 3 біти — це точний зсув (fine_x)
+            t.coarse_x = data >> 3;     // Старші 5 бітів — це грубий зсув (coarse_x)
+            address_latch = 1;
         }
         else {
-            // Етап 2: Записуємо молодший байт адреси у нижню половину vram_addr
-            vram_addr = (vram_addr & 0xFF00) | static_cast<uint16_t>(data);
-            vram_addr &= 0x3FFF; // Відеопам'ять обмежена 14 бітами, маскуємо все що вище
-            address_latch = 0;   // Скидаємо тригер у вихідний стан
+            // Другий запис: Y зміщення
+            t.fine_y = data & 0x07;     // Молодші 3 біти — точний зсув (fine_y)
+            t.coarse_y = data >> 3;     // Старші 5 бітів — грубий зсув (coarse_y)
+            address_latch = 0;
+        }
+        break;
+    case 0x0006: // $2006 - PPUADDR
+        if (address_latch == 0) {
+            // Перший запис: старший байт адреси VRAM (обмежений до 14 біт маскою 0x3F)
+            t.reg = (t.reg & 0x00FF) | (static_cast<uint16_t>(data & 0x3F) << 8);
+            address_latch = 1;
+        }
+        else {
+            // Другий запис: молодший байт адреси VRAM
+            t.reg = (t.reg & 0xFF00) | data;
+            v = t; // При другому записі адреса ОФІЦІЙНО передається відеочіпу
+            address_latch = 0;
         }
         break;
     case 0x0007: // $2007 - PPUDATA
-        ppuWrite(vram_addr, data); // Пишемо байт безпосередньо на відеошину PPU
-        vram_addr++;               // Автоматично зміщуємо адресу вперед
+        ppuWrite(v.reg, data);
+        // Інкремент адреси після запису залежить від біта 2 регістра PPUCTRL (+1 або +32)
+        v.reg += (control & 0x04) ? 32 : 1;
         break;
     }
 }
