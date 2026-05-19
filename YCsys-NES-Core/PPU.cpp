@@ -22,24 +22,171 @@ PPU::PPU() : tblName{}, tblPalette{} {}
 PPU::~PPU() {}
 
 // =========================================================================
-// ГОЛОВНИЙ ЦИКЛ PPU (System Clock)
+// ГОЛОВНИЙ ЦИКЛ PPU (Генератор таймінгів екрану та рендеринг)
 // =========================================================================
 void PPU::clock() {
-    // Малюємо піксель ТІЛЬКИ якщо промінь знаходиться у видимій зоні (256x240)
-    if (scanline >= 0 && scanline < 240 && cycle >= 0 && cycle < 256) {
-        // Явно вказуємо, що математику треба робити у великому типі (size_t)
-        sprScreen[static_cast<size_t>(scanline) * 256 + cycle] = (rand() % 2 == 0) ? 0xFFFFFFFF : 0xFF000000;
+    if (scanline >= -1 && scanline < 240) {
+
+        // --- 1. ПАЙПЛАЙН ЧИТАННЯ (Fetch Pipeline) ---
+        if ((cycle >= 1 && cycle <= 256) || (cycle >= 321 && cycle <= 336)) {
+            UpdateShifters();
+
+            switch ((cycle - 1) % 8) {
+            case 0:
+                LoadBackgroundShifters();
+                bg_next_tile_id = ppuRead(0x2000 | (v.reg & 0x0FFF));
+                break;
+            case 2:
+                // Читання атрибутів палітри (з безпечним кастуванням типів)
+                bg_next_tile_attrib = ppuRead(0x23C0
+                    | (static_cast<uint16_t>(v.nametable_y) << 11)
+                    | (static_cast<uint16_t>(v.nametable_x) << 10)
+                    | ((static_cast<uint16_t>(v.coarse_y) >> 2) << 3)
+                    | (static_cast<uint16_t>(v.coarse_x) >> 2));
+
+                if (v.coarse_y & 0x02) bg_next_tile_attrib >>= 4;
+                if (v.coarse_x & 0x02) bg_next_tile_attrib >>= 2;
+                bg_next_tile_attrib &= 0x03;
+                break;
+            case 4:
+                bg_next_tile_lsb = ppuRead(((control & 0x10) ? 0x1000 : 0x0000)
+                    + (static_cast<uint16_t>(bg_next_tile_id) << 4)
+                    + v.fine_y + 0);
+                break;
+            case 6:
+                bg_next_tile_msb = ppuRead(((control & 0x10) ? 0x1000 : 0x0000)
+                    + (static_cast<uint16_t>(bg_next_tile_id) << 4)
+                    + v.fine_y + 8);
+                break;
+            case 7:
+                IncrementScrollX(); // Зсув на наступний тайл
+                break;
+            }
+        }
+
+        // --- 2. СИНХРОНІЗАЦІЯ РЯДКІВ (Скролінг) ---
+        if (cycle == 256) {
+            IncrementScrollY(); // Кінець видимого рядка - спускаємось нижче
+        }
+        if (cycle == 257) {
+            LoadBackgroundShifters();
+            TransferAddressX(); // Повертаємо промінь у лівий край
+        }
+        if (scanline == -1 && cycle >= 280 && cycle < 305) {
+            TransferAddressY(); // Підготовка до малювання нового кадру
+        }
     }
 
+    // =====================================================================
+    // 3. РЕНДЕРИНГ ПІКСЕЛЯ 
+    // =====================================================================
+    if (scanline >= 0 && scanline < 240 && cycle >= 1 && cycle <= 256) {
+        uint8_t bg_pixel = 0x00;
+        uint8_t bg_palette = 0x00;
+
+        if (mask & 0x08) {
+            uint16_t bit_mux = 0x8000 >> fine_x;
+
+            uint8_t p0_pixel = (bg_shifter_pattern_lo & bit_mux) > 0;
+            uint8_t p1_pixel = (bg_shifter_pattern_hi & bit_mux) > 0;
+            bg_pixel = (p1_pixel << 1) | p0_pixel;
+
+            uint8_t bg_pal0 = (bg_shifter_attrib_lo & bit_mux) > 0;
+            uint8_t bg_pal1 = (bg_shifter_attrib_hi & bit_mux) > 0;
+            bg_palette = (bg_pal1 << 1) | bg_pal0;
+        }
+
+        // Якщо малювання фону вимкнено або піксель прозорий, color_address = 0
+        uint8_t color_address = 0x00;
+        if (bg_pixel != 0x00) {
+            color_address = (bg_palette << 2) | bg_pixel;
+        }
+
+        // Читаємо фінальний індекс кольору з пам'яті PPU ($3F00)
+        uint8_t color_index = ppuRead(0x3F00 + color_address) & 0x3F;
+
+        // БЕЗПЕЧНИЙ ЗАПИС У ВІДЕОБУФЕР (з кастуванням size_t!)
+        // Явно переводимо обидві координати в size_t, щоб аналізатор спав спокійно
+        size_t pixel_index = (static_cast<size_t>(scanline) * 256) + static_cast<size_t>(cycle - 1);
+        sprScreen[pixel_index] = palScreen[color_index];
+    }
+
+    // --- Емуляція ходу променя екрану ---
     cycle++;
-    if (cycle >= 341) { // Клікнули за межі правого краю екрану
+    if (cycle >= 341) {
         cycle = 0;
         scanline++;
-
-        if (scanline >= 261) { // Дійшли до кінця кадру
-            scanline = -1;     // Скидаємо на перед-рендеринговий рядок
-            frame_complete = true; // Сигнал для SDL2, що можна виводити картинку
+        if (scanline >= 261) {
+            scanline = -1;
+            frame_complete = true;
         }
+    }
+}
+
+// =========================================================================
+// ДОПОМІЖНІ ФУНКЦІЇ ПАЙПЛАЙНУ ТА СКРОЛІНГУ
+// =========================================================================
+void PPU::LoadBackgroundShifters() {
+    bg_shifter_pattern_lo = (bg_shifter_pattern_lo & 0xFF00) | bg_next_tile_lsb;
+    bg_shifter_pattern_hi = (bg_shifter_pattern_hi & 0xFF00) | bg_next_tile_msb;
+    bg_shifter_attrib_lo = (bg_shifter_attrib_lo & 0xFF00) | ((bg_next_tile_attrib & 0b01) ? 0xFF : 0x00);
+    bg_shifter_attrib_hi = (bg_shifter_attrib_hi & 0xFF00) | ((bg_next_tile_attrib & 0b10) ? 0xFF : 0x00);
+}
+
+void PPU::UpdateShifters() {
+    if (mask & 0x08) { // Якщо рендеринг фону увімкнено
+        bg_shifter_pattern_lo <<= 1;
+        bg_shifter_pattern_hi <<= 1;
+        bg_shifter_attrib_lo <<= 1;
+        bg_shifter_attrib_hi <<= 1;
+    }
+}
+
+void PPU::IncrementScrollX() {
+    if (mask & 0x18) { // Якщо рендеринг фону або спрайтів увімкнено
+        if (v.coarse_x == 31) {
+            v.coarse_x = 0;
+            v.nametable_x = ~v.nametable_x;
+        }
+        else {
+            v.coarse_x++;
+        }
+    }
+}
+
+void PPU::IncrementScrollY() {
+    if (mask & 0x18) {
+        if (v.fine_y < 7) {
+            v.fine_y++;
+        }
+        else {
+            v.fine_y = 0;
+            if (v.coarse_y == 29) {
+                v.coarse_y = 0;
+                v.nametable_y = ~v.nametable_y;
+            }
+            else if (v.coarse_y == 31) {
+                v.coarse_y = 0;
+            }
+            else {
+                v.coarse_y++;
+            }
+        }
+    }
+}
+
+void PPU::TransferAddressX() {
+    if (mask & 0x18) {
+        v.nametable_x = t.nametable_x;
+        v.coarse_x = t.coarse_x;
+    }
+}
+
+void PPU::TransferAddressY() {
+    if (mask & 0x18) {
+        v.fine_y = t.fine_y;
+        v.nametable_y = t.nametable_y;
+        v.coarse_y = t.coarse_y;
     }
 }
 
