@@ -29,8 +29,7 @@ void PPU::clock() {
 	// потрібно додати скидання Sprite Zero Hit на початку кадру, щоб уникнути помилкових спрацьовувань
     if (scanline == -1 && cycle == 1) {
         bSpriteZeroHitPossible = false; // Скидаємо прапорець можливості Sprite Zero Hit на початку кадру
-		status &= ~0x40; // Скидаємо біт Sprite Zero Hit у статусі
-        status &= ~0x20; // Скидаємо біт Sprite Overflow на початку кадру
+        status &= ~0xE0; //Очищуємо одним махом (це скине біти 7, 6 та 5 одночасно) VBlank (0x80), Sprite Zero Hit (0x40) та Sprite Overflow (0x20)
 	}
 
 	// =====================================================================
@@ -251,6 +250,15 @@ void PPU::clock() {
         }
     }
 
+    // --- ГЕНЕРАЦІЯ СИГНАЛУ NMI НА ПОЧАТКУ VBLANK ---
+    if (scanline == 241 && cycle == 1) {
+        status |= 0x80; // Встановлюємо прапорець VBlank (біт 7 у $2002)
+
+        if (control & 0x80) { // Якщо NMI дозволено в PPUCTRL
+            nmi_occurred = true; // Викидаємо прапорець переривання на шину
+        }
+    }
+
     // Емуляція ходу променя екрану
     cycle++;
     if (cycle >= 341) {
@@ -388,6 +396,12 @@ void PPU::cpuWrite(uint16_t addr, uint8_t data) {
         // Нижні 2 біти PPUCTRL вказують на стартову таблицю імен (екран)
         t.nametable_x = control & 0x01;
         t.nametable_y = (control & 0x02) >> 1;
+
+        // ФІКС: Якщо ми вже у періоді VBlank і гра щойно дозволила NMI —
+            // генеруємо сигнал переривання негайно, щоб уникнути зависання
+        if ((control & 0x80) && (status & 0x80)) {
+            nmi_occurred = true;
+        }
         break;
     case 0x0001: // $2001 - PPUMASK
         mask = data;

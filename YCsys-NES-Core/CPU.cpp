@@ -1180,3 +1180,31 @@ uint8_t CPU6502::CPY() {
     SetFlag(FLAGS6502::N, temp & 0x0080);
     return 0;
 }
+
+// =========================================================================
+// АПАРАТНЕ ПЕРЕРИВАННЯ NMI (Non-Maskable Interrupt)
+// =========================================================================
+void CPU6502::nmi() {
+    // Зберігаємо поточний лічильник команд у стек (High-Byte, потім Low-Byte)
+    write(static_cast<uint16_t>(0x0100) + stkp, static_cast<uint8_t>((pc >> 8) & 0x00FF));
+    stkp--;
+    write(static_cast<uint16_t>(0x0100) + stkp, static_cast<uint8_t>(pc & 0x00FF));
+    stkp--;
+
+    // Налаштовуємо прапорці статусу для апаратного переривання
+    SetFlag(FLAGS6502::B, false); // Прапорець Break = 0
+    SetFlag(FLAGS6502::U, true);  // Unused завжди = 1
+    SetFlag(FLAGS6502::I, true);  // Блокуємо звичайні IRQ під час обробки NMI
+
+    write(static_cast<uint16_t>(0x0100) + stkp, status);
+    stkp--;
+
+    // Зчитуємо адресу обробника з жорстко зафіксованого вектора NMI ($FFFA-$FFFB)
+    addr_abs = 0xFFFA;
+    uint16_t lo = read(addr_abs);
+    uint16_t hi = read(addr_abs + 1);
+    pc = (hi << 8) | lo;
+
+    // Апаратне переривання NMI в архітектурі 6502 займає рівно 7 тактів CPU
+    cycles = 7;
+}

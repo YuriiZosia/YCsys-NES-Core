@@ -31,6 +31,7 @@ public:
     void ConnectBus(Bus* nBus) { bus = nBus; }
 
     void clock();
+    void nmi(); // Апаратне немасковане переривання
 
     bool debug = false;
     uint8_t  a = 0x00, x = 0x00, y = 0x00;  // Акумулятор та індексні регістри
