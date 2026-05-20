@@ -23,49 +23,119 @@ APU::~APU() {}
 
 void APU::cpuWrite(uint16_t addr, uint8_t data) {
     switch (addr) {
-        // --- Pulse 1 ---
-    case 0x4000: pulse1.duty = (data & 0xC0) >> 6; pulse1.volume = data & 0x0F; break;
-    case 0x4001: break; // Sweep (ігноруємо)
-    case 0x4002: pulse1.timer = (pulse1.timer & 0xFF00) | data; break;
-    case 0x4003: pulse1.timer = (pulse1.timer & 0x00FF) | (static_cast<uint16_t>(data & 0x07) << 8); pulse1.duty_step = 0; break;
+        // ==========================================
+        // PULSE 1
+        // ==========================================
+    case 0x4000:
+        pulse1.duty = (data & 0xC0) >> 6;
+        pulse1.halt = (data & 0x20) != 0;
+        pulse1.env.disable = (data & 0x10) != 0;
+        pulse1.env.volume = data & 0x0F;
+        break;
+    case 0x4001:
+        pulse1.sweep.enabled = (data & 0x80) != 0;
+        pulse1.sweep.period = (data & 0x70) >> 4;
+        pulse1.sweep.down = (data & 0x08) != 0;
+        pulse1.sweep.shift = data & 0x07;
+        pulse1.sweep.reload = true;
+        break;
+    case 0x4002:
+        pulse1.timer = (pulse1.timer & 0xFF00) | data;
+        break;
+    case 0x4003:
+        pulse1.timer = (pulse1.timer & 0x00FF) | (static_cast<uint16_t>(data & 0x07) << 8);
+        pulse1.duty_step = 0;
+        pulse1.env.start = true; // Рестарт огинаючої
+        if (pulse1.enabled) pulse1.length_counter = length_table[data >> 3];
+        break;
 
-        // --- Pulse 2 ---
-    case 0x4004: pulse2.duty = (data & 0xC0) >> 6; pulse2.volume = data & 0x0F; break;
-    case 0x4005: break; // Sweep (ігноруємо)
-    case 0x4006: pulse2.timer = (pulse2.timer & 0xFF00) | data; break;
-    case 0x4007: pulse2.timer = (pulse2.timer & 0x00FF) | (static_cast<uint16_t>(data & 0x07) << 8); pulse2.duty_step = 0; break;
+        // ==========================================
+        // PULSE 2
+        // ==========================================
+    case 0x4004:
+        pulse2.duty = (data & 0xC0) >> 6;
+        pulse2.halt = (data & 0x20) != 0;
+        pulse2.env.disable = (data & 0x10) != 0;
+        pulse2.env.volume = data & 0x0F;
+        break;
+    case 0x4005:
+        pulse2.sweep.enabled = (data & 0x80) != 0;
+        pulse2.sweep.period = (data & 0x70) >> 4;
+        pulse2.sweep.down = (data & 0x08) != 0;
+        pulse2.sweep.shift = data & 0x07;
+        pulse2.sweep.reload = true;
+        break;
+    case 0x4006:
+        pulse2.timer = (pulse2.timer & 0xFF00) | data;
+        break;
+    case 0x4007:
+        pulse2.timer = (pulse2.timer & 0x00FF) | (static_cast<uint16_t>(data & 0x07) << 8);
+        pulse2.duty_step = 0;
+        pulse2.env.start = true;
+        if (pulse2.enabled) pulse2.length_counter = length_table[data >> 3];
+        break;
 
-        // --- Triangle ---
-    case 0x4008: break; // Лінійний лічильник (ігноруємо для базового звуку)
-    case 0x4009: break; // Невживаний порт
-    case 0x400A: // Нижні 8 бітів таймера Triangle
+        // ==========================================
+        // TRIANGLE
+        // ==========================================
+    case 0x4008:
+        triangle.halt = (data & 0x80) != 0;
+        triangle.linear_reload = data & 0x7F; // Завантаження лінійного лічильника
+        break;
+    case 0x400A:
         triangle.timer = (triangle.timer & 0xFF00) | data;
         break;
-    case 0x400B: // Верхні 3 біти таймера Triangle (безпечний каст)
+    case 0x400B:
         triangle.timer = (triangle.timer & 0x00FF) | (static_cast<uint16_t>(data & 0x07) << 8);
+        triangle.linear_reload_flag = true; // Взводимо прапорець перезавантаження
+        if (triangle.enabled) triangle.length_counter = length_table[data >> 3];
         break;
 
-        // --- Noise ---
-    case 0x400C: // Гучність каналу шуму
-        noise.volume = data & 0x0F;
+        // ==========================================
+        // NOISE
+        // ==========================================
+    case 0x400C:
+        noise.halt = (data & 0x20) != 0;
+        noise.env.disable = (data & 0x10) != 0;
+        noise.env.volume = data & 0x0F;
         break;
-    case 0x400D: break; // Невживаний порт
-    case 0x400E: { // Вибір частоти (періоду) шуму з таблиці NTSC
-        // ФІКС: Правильний розмір масиву періодів шуму (16 елементів)
+    case 0x400E: {
         static const uint16_t noise_periods[16] = {
             4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068
         };
         noise.timer = noise_periods[data & 0x0F];
         break;
     }
-    case 0x400F: break; // Довжина звуку (ігноруємо)
+    case 0x400F:
+        noise.env.start = true;
+        if (noise.enabled) noise.length_counter = length_table[data >> 3];
+        break;
 
-        // --- Керування статусом APU ---
+        // ==========================================
+        // СТАТУС ТА СЕКВЕНСОР
+        // ==========================================
     case 0x4015:
         pulse1.enabled = (data & 0x01) > 0;
+        if (!pulse1.enabled) pulse1.length_counter = 0;
+
         pulse2.enabled = (data & 0x02) > 0;
-        triangle.enabled = (data & 0x04) > 0; // Вмикаємо/вимикаємо басовий канал
-        noise.enabled = (data & 0x08) > 0; // Вмикаємо/вимикаємо канал шуму
+        if (!pulse2.enabled) pulse2.length_counter = 0;
+
+        triangle.enabled = (data & 0x04) > 0;
+        if (!triangle.enabled) triangle.length_counter = 0;
+
+        // ФІКС: Повертаємо ШУМ на законне місце!
+        noise.enabled = (data & 0x08) > 0;
+        if (!noise.enabled) noise.length_counter = 0;
+        break;
+
+    case 0x4017:
+        frame_mode = (data & 0x80) ? 1 : 0;
+        // Якщо біт 7 встановлено, негайно тактуємо чверть- і напівкадр
+        if (frame_mode == 1) {
+            clock_quarter_frame();
+            clock_half_frame();
+        }
         break;
     }
 }
@@ -73,32 +143,69 @@ void APU::cpuWrite(uint16_t addr, uint8_t data) {
 uint8_t APU::cpuRead(uint16_t addr) {
     (void)addr;
     uint8_t data = 0x00;
-    // Логіка читання статус-регістра APU ($4015) буде тут
+    // (Логіка 4015 буде тут пізніше, якщо потрібно для конкретних ігор)
     return data;
 }
 
-void APU::clock() {
-    // Канал Triangle працює апаратно вдвічі швидше за Pulse і тактується КОЖЕН крок APU
-    triangle_sample = triangle.clock();
+// ---------------------------------------------------------
+// ДОПОМІЖНІ МЕТОДИ СЕКВЕНСОРА
+// ---------------------------------------------------------
+void APU::clock_quarter_frame() {
+    pulse1.env.clock(pulse1.halt);
+    pulse2.env.clock(pulse2.halt);
+    noise.env.clock(noise.halt);
+    triangle.clock_linear(); // Лінійний лічильник трикутника тікає тут
+}
 
-    // Генератори Pulse в NES тактуються кожен 2-й системний крок процесора
+void APU::clock_half_frame() {
+    if (!pulse1.halt && pulse1.length_counter > 0) pulse1.length_counter--;
+    if (!pulse2.halt && pulse2.length_counter > 0) pulse2.length_counter--;
+    if (!triangle.halt && triangle.length_counter > 0) triangle.length_counter--;
+    if (!noise.halt && noise.length_counter > 0) noise.length_counter--;
+
+    pulse1.sweep.clock(pulse1.timer, true);
+    pulse2.sweep.clock(pulse2.timer, false);
+}
+
+// ---------------------------------------------------------
+// ГОЛОВНИЙ ГОДИННИК APU
+// ---------------------------------------------------------
+void APU::clock() {
+    // 1. Апаратне тактування каналів
+    triangle_sample = triangle.clock();
     if (clock_counter % 2 == 0) {
         pulse1_sample = pulse1.clock();
         pulse2_sample = pulse2.clock();
         noise_sample = noise.clock();
     }
+
+    // 2. Секвенсор кадрів (керує оболонками та довжинами кожні ~7457 тактів)
+    if (clock_counter % 7457 == 0) {
+        if (frame_mode == 0) {
+            // 4-кроковий режим
+            frame_clock_counter = (frame_clock_counter + 1) % 4;
+            clock_quarter_frame();
+            if (frame_clock_counter == 1 || frame_clock_counter == 3) {
+                clock_half_frame();
+            }
+        }
+        else {
+            // 5-кроковий режим
+            frame_clock_counter = (frame_clock_counter + 1) % 5;
+            if (frame_clock_counter != 4) { // На 4-му кроці нічого не відбувається
+                clock_quarter_frame();
+            }
+            if (frame_clock_counter == 1 || frame_clock_counter == 3) {
+                clock_half_frame();
+            }
+        }
+    }
+
     clock_counter++;
 }
 
 double APU::GetOutputSample() const {
-    // Змішуємо 4 канали. Максимальне значення: 15 * 4 = 60.
     double mixed = static_cast<double>(pulse1_sample + pulse2_sample + triangle_sample + noise_sample) / 60.0;
-
-    // Якщо всі канали мовчать (тиша), повертаємо ідеальний 0.0, щоб динаміки не гуділи.
-    if (mixed == 0.0) {
-        return 0.0;
-    }
-
-    // Відцентровуємо сигнал: діапазон [0.0 ... 1.0] перетворюється на [-0.5 ... +0.5]
+    if (mixed == 0.0) return 0.0;
     return mixed - 0.5;
 }
