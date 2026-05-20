@@ -22,28 +22,12 @@
 #pragma warning(disable: 26819) // Вимикаємо попередження про fallthrough
 #pragma warning(disable: 26451) // Вимикаємо попередження про переповнення для SDL
 #include <SDL.h>
-#pragma warning(pop)            // Повертаємо аналізатор до звичного суворого режиму
+#pragma warning(pop)            
+
 #include "Bus.h"
 
- // Коефіцієнт масштабування вікна (оригінал 256x240 занадто малий для моніторів)
+ // Коефіцієнт масштабування вікна
 const int SCALE = 3;
-
-// Безпечна Callback-функція звуку SDL2 (Контекст шини передається через userdata)
-static void AudioCallback(void* userdata, Uint8* stream, int len) {
-    float* fStream = reinterpret_cast<float*>(stream);
-    int samples = len / static_cast<int>(sizeof(float));
-
-    Bus* nes_context = reinterpret_cast<Bus*>(userdata);
-
-    for (int i = 0; i < samples; i++) {
-        if (nes_context) {
-            fStream[i] = static_cast<float>(nes_context->apu.GetOutputSample());
-        }
-        else {
-            fStream[i] = 0.0f;
-        }
-    }
-}
 
 int main(int argc, char* argv[]) {
     // Встановлюємо кодування UTF-8 для консолі Windows
@@ -102,8 +86,8 @@ int main(int argc, char* argv[]) {
     audio_spec.format = AUDIO_F32SYS; // 32-бітний float
     audio_spec.channels = 1;          // Моно
     audio_spec.samples = 1024;        // Розмір звукового буфера
-    audio_spec.callback = nullptr;    // ФІКС: Вимикаємо Callback! Будемо пушити звук вручну
-    audio_spec.userdata = nullptr;    
+    audio_spec.callback = nullptr;    // Вимикаємо Callback, пушимо звук вручну
+    audio_spec.userdata = nullptr;
 
     SDL_AudioDeviceID audio_device = SDL_OpenAudioDevice(nullptr, 0, &audio_spec, nullptr, 0);
     if (audio_device > 0) {
@@ -116,9 +100,15 @@ int main(int argc, char* argv[]) {
     // 3. Головний ігровий та графічний цикл
     bool bQuit = false;
     SDL_Event event;
+
+    // МАТЕМАТИКА СИНХРОНІЗАЦІЇ ТА ФІЛЬТРАЦІЇ (DSP)
     double dAudioTime = 0.0;
-    const double dAudioTimePerSystemClock = 1.0 / 5369318.0; // 1 системний такт PPU
-    const double dAudioTimePerSample = 1.0 / 44100.0;        // 1 семпл для SDL
+    // Підлаштовуємо генерацію під реальну швидкість 60Hz VSYNC екрану (89342 тактів PPU на кадр * 60)
+    const double dAudioTimePerSystemClock = 1.0 / 5360520.0;
+    const double dAudioTimePerSample = 1.0 / 44100.0;
+
+    double dAudioSampleAccumulator = 0.0; // Акумулятор мікро-семплів для Boxcar-фільтра
+    int nAudioSampleCount = 0;            // Лічильник зібраних кроків
 
     while (!bQuit) {
         while (SDL_PollEvent(&event)) {
@@ -140,20 +130,34 @@ int main(int argc, char* argv[]) {
         nes->controller[0] |= state[SDL_SCANCODE_LEFT] ? 0x02 : 0x00; // Left
         nes->controller[0] |= state[SDL_SCANCODE_RIGHT] ? 0x01 : 0x00; // Right
 
+        // КРУТИМО СИСТЕМНИЙ ГОДИННИК, поки PPU не завершить рендеринг повного кадру
         while (!nes->ppu.frame_complete) {
             nes->clock();
-            // Синхронізація звуку
+
+            // Збираємо високочастотні амплітуди APU на кожному системному такті
+            dAudioSampleAccumulator += nes->apu.GetOutputSample();
+            nAudioSampleCount++;
+
+            // Синхронізація та видача звуку в SDL за низькою частотою (44.1 кГц)
             dAudioTime += dAudioTimePerSystemClock;
             if (dAudioTime >= dAudioTimePerSample) {
-                dAudioTime -= dAudioTimePerSample; // Скидаємо таймер
+                dAudioTime -= dAudioTimePerSample;
 
-                // Беремо готовий звук з APU і миттєво відправляємо в динаміки
-                float sample = static_cast<float>(nes->apu.GetOutputSample());
+                // Boxcar-фільтрація: беремо середнє значення, усуваючи металевий скрегіт аліасингу
+                float sample = 0.0f;
+                if (nAudioSampleCount > 0) {
+                    sample = static_cast<float>(dAudioSampleAccumulator / nAudioSampleCount);
+                }
                 SDL_QueueAudio(audio_device, &sample, sizeof(float));
+
+                // Очищення накопичувача для наступного аудіо-вікна
+                dAudioSampleAccumulator = 0.0;
+                nAudioSampleCount = 0;
             }
         }
         nes->ppu.frame_complete = false;
 
+        // 4. Оновлюємо текстуру вікна даними з нашого std::array
         SDL_UpdateTexture(texture, nullptr, nes->ppu.sprScreen.data(), 256 * sizeof(uint32_t));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);

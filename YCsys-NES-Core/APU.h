@@ -209,6 +209,7 @@ private:
         bool enabled = false;
         uint8_t length_counter = 0;
         bool halt = false;
+        bool mode = false;
 
         Envelope env;
 
@@ -218,7 +219,8 @@ private:
             timer_value--;
             if (timer_value == 0xFFFF) {
                 timer_value = timer;
-                uint16_t feedback = (lfsr & 0x0001) ^ ((lfsr & 0x0002) >> 1);
+                // ФІКС 4A: Враховуємо режим! Mode 1 (Біт 7) - це металевий дзенькіт
+                uint16_t feedback = (lfsr & 0x0001) ^ ((mode ? (lfsr & 0x0040) >> 6 : (lfsr & 0x0002) >> 1));
                 lfsr >>= 1;
                 lfsr |= (feedback << 14);
             }

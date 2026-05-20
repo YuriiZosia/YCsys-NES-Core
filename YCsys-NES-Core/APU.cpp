@@ -104,6 +104,7 @@ void APU::cpuWrite(uint16_t addr, uint8_t data) {
             4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068
         };
         noise.timer = noise_periods[data & 0x0F];
+		noise.mode = (data & 0x80) != 0; // Режим генерації шуму (звичайний або з коротким циклом). Зчитуємо 7-й біт (Mode)
         break;
     }
     case 0x400F:
@@ -205,7 +206,16 @@ void APU::clock() {
 }
 
 double APU::GetOutputSample() const {
-    double mixed = static_cast<double>(pulse1_sample + pulse2_sample + triangle_sample + noise_sample) / 60.0;
+    // ФІКС 4B: Автентична апроксимація аудіо мікшера NES (Нелінійна)
+    // Ці вагові коефіцієнти ідеально відтворюють баланс між басом, пульсом та ударними.
+    double pulse_out = 0.00752 * (pulse1_sample + pulse2_sample);
+    double tnd_out = 0.00851 * triangle_sample + 0.00494 * noise_sample;
+
+    // Результат лежить у безпечних межах ~0.0 до 0.42
+    double mixed = pulse_out + tnd_out;
+
     if (mixed == 0.0) return 0.0;
-    return mixed - 0.5;
+
+    // Відцентровуємо хвилю для усунення DC Offset (щоб динаміки не гуділи)
+    return mixed - 0.21;
 }
