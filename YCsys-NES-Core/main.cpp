@@ -28,18 +28,34 @@
  // Коефіцієнт масштабування вікна (оригінал 256x240 занадто малий для моніторів)
 const int SCALE = 3;
 
+// Безпечна Callback-функція звуку SDL2 (Контекст шини передається через userdata)
+static void AudioCallback(void* userdata, Uint8* stream, int len) {
+    float* fStream = reinterpret_cast<float*>(stream);
+    int samples = len / static_cast<int>(sizeof(float));
+
+    Bus* nes_context = reinterpret_cast<Bus*>(userdata);
+
+    for (int i = 0; i < samples; i++) {
+        if (nes_context) {
+            fStream[i] = static_cast<float>(nes_context->apu.GetOutputSample());
+        }
+        else {
+            fStream[i] = 0.0f;
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
-    // Встановлюємо кодування UTF-8 для консолі Windows, щоб бачити українську мову
+    // Встановлюємо кодування UTF-8 для консолі Windows
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 
-    // 1. Ініціалізація підсистеми відео SDL2
-    if (SDL_Init(SDL_INIT_VIDEO) < 0) {
+    // 1. Ініціалізація підсистем ВІДЕО та АУДІО SDL2
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
         std::cerr << "SDL Initialization Error: " << SDL_GetError() << std::endl;
         return -1;
     }
 
-    // Створюємо головне вікно програми (768x720 пікселів при SCALE = 3)
     SDL_Window* window = SDL_CreateWindow(
         "YCsys NES Core",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
@@ -53,10 +69,7 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    // Створюємо апаратний рендерер із підтримкою Vertical Sync
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
-    // Створюємо 32-бітну ARGB текстуру, куди будемо копіювати наш екранний масив
     SDL_Texture* texture = SDL_CreateTexture(
         renderer,
         SDL_PIXELFORMAT_ARGB8888,
@@ -64,49 +77,57 @@ int main(int argc, char* argv[]) {
         256, 240
     );
 
-    // 2. Створюємо екземпляр нашої віртуальної консолі
-    // Створюємо консоль у Купі (надійно і не грузить стек)
+    // 2. Створюємо екземпляр віртуальної консолі у Купі
     Bus* nes = new Bus();
 
     // =================================================================
     // ЗАВАНТАЖЕННЯ ГРИ (ROM) ТА СТАРТ СИСТЕМИ
     // =================================================================
-    // Створюємо картридж
     std::shared_ptr<Cartridge> cart = std::make_shared<Cartridge>("games\\Super Mario Bros.nes");
 
     if (!cart->bImageValid) {
         std::cerr << "Помилка: Не вдалося завантажити ROM!" << std::endl;
-        // Тут поки що буде просто чорний/сірий екран, якщо файлу немає
     }
     else {
-        nes->insertCartridge(cart); // Вставляємо картридж у гніздо нашої шини
+        nes->insertCartridge(cart);
     }
 
-    // КРИТИЧНО ВАЖЛИВО: Перезавантажуємо CPU!
-    // Це змусить процесор прочитати Вектор Старту (0xFFFC) з картриджа 
-    // і почати виконувати код гри з правильної адреси.
     nes->cpu.reset();
+
     // =================================================================
+    // НАЛАШТУВАННЯ АУДІО СИСТЕМИ SDL2
+    // =================================================================
+    SDL_AudioSpec audio_spec{};
+    audio_spec.freq = 44100;          // Частота дискретизації (44.1 кГц)
+    audio_spec.format = AUDIO_F32SYS; // 32-бітний float
+    audio_spec.channels = 1;          // Моно
+    audio_spec.samples = 1024;         // Розмір звукового буфера
+    audio_spec.callback = AudioCallback;
+    audio_spec.userdata = nes;        // ПЕРЕДАЄМО НАШУ ШИНУ ЯК КОНТЕКСТ!
+
+    SDL_AudioDeviceID audio_device = SDL_OpenAudioDevice(nullptr, 0, &audio_spec, nullptr, 0);
+    if (audio_device > 0) {
+        SDL_PauseAudioDevice(audio_device, 0); // Вмикаємо аудіо-пристрій
+    }
+    else {
+        std::cerr << "Audio Device Error: " << SDL_GetError() << std::endl;
+    }
 
     // 3. Головний ігровий та графічний цикл
     bool bQuit = false;
     SDL_Event event;
 
     while (!bQuit) {
-        // Обробка системних подій ОС (закриття вікна, рух миші тощо)
         while (SDL_PollEvent(&event)) {
             if (event.type == SDL_QUIT) {
                 bQuit = true;
             }
         }
 
-        // =================================================================
-        // ОПИТУВАННЯ КЛАВІАТУРИ ДЛЯ КОНТРОЛЕРА 1
-        // =================================================================
+        // Опитування клавіатури
         const Uint8* state = SDL_GetKeyboardState(NULL);
-        nes->controller[0] = 0x00; // Очищуємо старий стан
+        nes->controller[0] = 0x00;
 
-        // Порядок бітів (Shift Register): A, B, Select, Start, Up, Down, Left, Right
         nes->controller[0] |= state[SDL_SCANCODE_X] ? 0x80 : 0x00; // A
         nes->controller[0] |= state[SDL_SCANCODE_Z] ? 0x40 : 0x00; // B
         nes->controller[0] |= state[SDL_SCANCODE_A] ? 0x20 : 0x00; // Select
@@ -116,30 +137,26 @@ int main(int argc, char* argv[]) {
         nes->controller[0] |= state[SDL_SCANCODE_LEFT] ? 0x02 : 0x00; // Left
         nes->controller[0] |= state[SDL_SCANCODE_RIGHT] ? 0x01 : 0x00; // Right
 
-        // =================================================================
-
-        // КРУТИМО СИСТЕМНИЙ ГОДИННИК, поки PPU не завершить рендеринг повного кадру
         while (!nes->ppu.frame_complete) {
             nes->clock();
         }
-        // Скидаємо прапорець завершення кадру для наступного циклу розгортки
         nes->ppu.frame_complete = false;
-        // 4. Оновлюємо текстуру вікна даними з нашого std::array
-        SDL_UpdateTexture(texture, nullptr, nes->ppu.sprScreen.data(), 256 * sizeof(uint32_t));
 
-        // Очищуємо екран, копіюємо текстуру у вікно з масштабуванням і виводимо на монітор
+        SDL_UpdateTexture(texture, nullptr, nes->ppu.sprScreen.data(), 256 * sizeof(uint32_t));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
     }
 
     // Фінальне вивільнення ресурсів при закритті програми
+    if (audio_device > 0) {
+        SDL_CloseAudioDevice(audio_device);
+    }
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
 
-    delete nes; // Знищуємо об'єкт консолі.
-
+    delete nes;
     return 0;
 }

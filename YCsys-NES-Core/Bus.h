@@ -23,6 +23,7 @@
 #include "CPU.h"
 #include "Cartridge.h"
 #include "PPU.h"
+#include "APU.h"
 
 class Bus {
 public:
@@ -33,6 +34,7 @@ public:
 
 public: // Пристрої на шині
     CPU6502 cpu;
+    APU apu;
     std::array<uint8_t, 2048> cpuRam;
     PPU ppu;
 
