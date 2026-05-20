@@ -103,7 +103,7 @@ int main(int argc, char* argv[]) {
     audio_spec.channels = 1;          // Моно
     audio_spec.samples = 1024;        // Розмір звукового буфера
     audio_spec.callback = nullptr;    // ФІКС: Вимикаємо Callback! Будемо пушити звук вручну
-    audio_spec.userdata = nes;        // ПЕРЕДАЄМО НАШУ ШИНУ ЯК КОНТЕКСТ!
+    audio_spec.userdata = nullptr;    
 
     SDL_AudioDeviceID audio_device = SDL_OpenAudioDevice(nullptr, 0, &audio_spec, nullptr, 0);
     if (audio_device > 0) {

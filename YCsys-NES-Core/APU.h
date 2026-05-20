@@ -72,9 +72,66 @@ private:
         }
     };
 
-    // Два звукових канали
-    Pulse pulse1;
-    Pulse pulse2;
+    // --- Канал Triangle (Басова лінія) ---
+    struct Triangle {
+        uint16_t timer = 0;
+        uint16_t timer_value = 0;
+        uint8_t sequence_step = 0;
+        bool enabled = false;
+
+        uint8_t clock() {
+            // Генерація відбувається лише якщо канал увімкнено, а таймер не надто малий
+            if (!enabled || timer < 2) return 0;
+
+            timer_value--;
+            if (timer_value == 0xFFFF) { // Переповнення (відлік вниз завершено)
+                timer_value = timer;
+                sequence_step = (sequence_step + 1) & 0x1F; // Секвенсор на 32 кроки (0..31)
+            }
+
+            // ФІКС: Правильний розмір масиву послідовності трикутної хвилі (32 елементи)
+            static const uint8_t sequence[32] = {
+                15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0,
+                0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+            };
+
+            return sequence[sequence_step];
+        }
+    };
+
+    // --- Канал Noise (Псевдовипадковий шум) ---
+    struct Noise {
+        uint16_t timer = 0;
+        uint16_t timer_value = 0;
+        uint16_t lfsr = 1; // Регістр зсуву на старті обов'язково має бути 1 (не 0!)
+        uint8_t volume = 0;
+        bool enabled = false;
+
+        uint8_t clock() {
+            if (!enabled || timer == 0) return 0;
+
+            timer_value--;
+            if (timer_value == 0xFFFF) {
+                timer_value = timer;
+                // Формула LFSR лінійного зворотного зв'язку (Mode 0)
+                uint16_t feedback = (lfsr & 0x0001) ^ ((lfsr & 0x0002) >> 1);
+                lfsr >>= 1;
+                lfsr |= (feedback << 14);
+            }
+
+            // Якщо 0-й біт дорівнює 1 — канал видає тишу, якщо 0 — видає гучність
+            return (lfsr & 0x0001) ? 0 : volume;
+        }
+    };
+
+	// Об'єкти каналів звуку
+	Pulse pulse1; // Об'єкт першого каналу прямокутної хвилі
+    Pulse pulse2; // Об'єкт другого каналу прямокутної хвилі
+    Triangle triangle; // Об'єкт басового каналу
+    Noise noise;       // Об'єкт каналу шуму
+
     uint8_t pulse1_sample = 0;
     uint8_t pulse2_sample = 0;
+    uint8_t triangle_sample = 0;
+    uint8_t noise_sample = 0;
 };
