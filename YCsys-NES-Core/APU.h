@@ -32,7 +32,7 @@ public:
     void clock();
 
     // Отримання поточного змішаного звукового сигналу (для мікшера)
-    double GetOutputSample() ;
+    double GetOutputSample() const;
 
 private:
     double global_time = 0.0; // Тимчасовий акумулятор часу для хвильових функцій

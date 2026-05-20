@@ -101,8 +101,8 @@ int main(int argc, char* argv[]) {
     audio_spec.freq = 44100;          // Частота дискретизації (44.1 кГц)
     audio_spec.format = AUDIO_F32SYS; // 32-бітний float
     audio_spec.channels = 1;          // Моно
-    audio_spec.samples = 1024;         // Розмір звукового буфера
-    audio_spec.callback = AudioCallback;
+    audio_spec.samples = 1024;        // Розмір звукового буфера
+    audio_spec.callback = nullptr;    // ФІКС: Вимикаємо Callback! Будемо пушити звук вручну
     audio_spec.userdata = nes;        // ПЕРЕДАЄМО НАШУ ШИНУ ЯК КОНТЕКСТ!
 
     SDL_AudioDeviceID audio_device = SDL_OpenAudioDevice(nullptr, 0, &audio_spec, nullptr, 0);
@@ -116,6 +116,9 @@ int main(int argc, char* argv[]) {
     // 3. Головний ігровий та графічний цикл
     bool bQuit = false;
     SDL_Event event;
+    double dAudioTime = 0.0;
+    const double dAudioTimePerSystemClock = 1.0 / 5369318.0; // 1 системний такт PPU
+    const double dAudioTimePerSample = 1.0 / 44100.0;        // 1 семпл для SDL
 
     while (!bQuit) {
         while (SDL_PollEvent(&event)) {
@@ -139,6 +142,15 @@ int main(int argc, char* argv[]) {
 
         while (!nes->ppu.frame_complete) {
             nes->clock();
+            // Синхронізація звуку
+            dAudioTime += dAudioTimePerSystemClock;
+            if (dAudioTime >= dAudioTimePerSample) {
+                dAudioTime -= dAudioTimePerSample; // Скидаємо таймер
+
+                // Беремо готовий звук з APU і миттєво відправляємо в динаміки
+                float sample = static_cast<float>(nes->apu.GetOutputSample());
+                SDL_QueueAudio(audio_device, &sample, sizeof(float));
+            }
         }
         nes->ppu.frame_complete = false;
 
