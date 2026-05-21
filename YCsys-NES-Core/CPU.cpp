@@ -353,6 +353,100 @@ void CPU6502::clock() {
         case 0xCC: ABS(); CPY(); break;
 
             // =================================================================
+            // --- НЕОФІЦІЙНІ (НЕЛЕГАЛЬНІ) ОПКОДИ (Illegal Opcodes) ---
+            // =================================================================
+
+            // LAX
+        case 0xA7: ZP0(); LAX(); break;
+        case 0xB7: ZPY(); LAX(); break;
+        case 0xAF: ABS(); LAX(); break;
+        case 0xBF: ABY(); LAX(); break;
+        case 0xA3: IZX(); LAX(); break;
+        case 0xB3: IZY(); LAX(); break;
+
+            // SAX
+        case 0x87: ZP0(); SAX(); break;
+        case 0x97: ZPY(); SAX(); break;
+        case 0x8F: ABS(); SAX(); break;
+        case 0x83: IZX(); SAX(); break;
+
+            // DCP (DEC + CMP)
+        case 0xC7: ZP0(); DCP(); break;
+        case 0xD7: ZPX(); DCP(); break;
+        case 0xCF: ABS(); DCP(); break;
+        case 0xDF: ABX(); DCP(); break;
+        case 0xDB: ABY(); DCP(); break;
+        case 0xC3: IZX(); DCP(); break;
+        case 0xD3: IZY(); DCP(); break;
+
+            // ISB / ISC (INC + SBC)
+        case 0xE7: ZP0(); ISB(); break;
+        case 0xF7: ZPX(); ISB(); break;
+        case 0xEF: ABS(); ISB(); break;
+        case 0xFF: ABX(); ISB(); break;
+        case 0xFB: ABY(); ISB(); break;
+        case 0xE3: IZX(); ISB(); break;
+        case 0xF3: IZY(); ISB(); break;
+
+            // SLO (ASL + ORA)
+        case 0x07: ZP0(); SLO(); break;
+        case 0x17: ZPX(); SLO(); break;
+        case 0x0F: ABS(); SLO(); break;
+        case 0x1F: ABX(); SLO(); break;
+        case 0x1B: ABY(); SLO(); break;
+        case 0x03: IZX(); SLO(); break;
+        case 0x13: IZY(); SLO(); break;
+
+            // RLA (ROL + AND)
+        case 0x27: ZP0(); RLA(); break;
+        case 0x37: ZPX(); RLA(); break;
+        case 0x2F: ABS(); RLA(); break;
+        case 0x3F: ABX(); RLA(); break;
+        case 0x3B: ABY(); RLA(); break;
+        case 0x23: IZX(); RLA(); break;
+        case 0x33: IZY(); RLA(); break;
+
+            // SRE (LSR + EOR)
+        case 0x47: ZP0(); SRE(); break;
+        case 0x57: ZPX(); SRE(); break;
+        case 0x4F: ABS(); SRE(); break;
+        case 0x5F: ABX(); SRE(); break;
+        case 0x5B: ABY(); SRE(); break;
+        case 0x43: IZX(); SRE(); break;
+        case 0x53: IZY(); SRE(); break;
+
+            // RRA (ROR + ADC)
+        case 0x67: ZP0(); RRA(); break;
+        case 0x77: ZPX(); RRA(); break;
+        case 0x6F: ABS(); RRA(); break;
+        case 0x7F: ABX(); RRA(); break;
+        case 0x7B: ABY(); RRA(); break;
+        case 0x63: IZX(); RRA(); break;
+        case 0x73: IZY(); RRA(); break;
+
+            // Опкод EB (Аналог SBC)
+        case 0xEB: IMM(); SBC(); break;
+
+            // =================================================================
+            // --- СМІТТЄВІ NOP-ПОДІБНІ ІНСТРУКЦІЇ (Ігноруємо, але зміщуємо PC)
+            // =================================================================
+
+            // NOP - 1 байт
+        case 0x1A: case 0x3A: case 0x5A: case 0x7A: case 0xDA: case 0xFA:
+            IMP(); NOP(); break;
+
+            // NOP - 2 байти
+        case 0x80: case 0x82: case 0x89: case 0xC2: case 0xE2:
+            IMM(); NOP(); break;
+        case 0x04: case 0x14: case 0x34: case 0x44: case 0x54: case 0x64:
+        case 0x74: case 0xD4: case 0xF4:
+            ZP0(); NOP(); break;
+
+            // NOP - 3 байти
+        case 0x0C: case 0x1C: case 0x3C: case 0x5C: case 0x7C: case 0xDC: case 0xFC:
+            ABS(); NOP(); break;
+
+            // =================================================================
             // Якщо опкод ще не реалізований або невідомий (нелегальний)
             // =================================================================
         default:
@@ -1183,6 +1277,118 @@ uint8_t CPU6502::CPY() {
     SetFlag(FLAGS6502::N, temp & 0x0080);
     return 0;
 }
+
+// =========================================================================
+// НЕОФІЦІЙНІ (НЕЛЕГАЛЬНІ) ІНСТРУКЦІЇ ПРОЦЕСОРА 6502
+// =========================================================================
+
+// LAX = LDA + LDX
+uint8_t CPU6502::LAX() {
+    fetch();
+    a = fetched;
+    x = fetched;
+    SetFlag(FLAGS6502::Z, a == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    return 1;
+}
+
+// SAX = Зберігає побітове (A AND X) у пам'ять
+uint8_t CPU6502::SAX() {
+    write(addr_abs, a & x);
+    return 0;
+}
+
+// DCP = DEC + CMP (Ось той самий винуватець крашу The Legend of Zelda!)
+uint8_t CPU6502::DCP() {
+    fetch();
+    uint16_t temp = (uint16_t)fetched - 1;
+    write(addr_abs, temp & 0x00FF);
+
+    uint16_t comp = (uint16_t)a - (temp & 0x00FF);
+    SetFlag(FLAGS6502::C, a >= (temp & 0x00FF));
+    SetFlag(FLAGS6502::Z, (comp & 0x00FF) == 0x0000);
+    SetFlag(FLAGS6502::N, comp & 0x0080);
+    return 0;
+}
+
+// ISB (або ISC) = INC + SBC
+uint8_t CPU6502::ISB() {
+    fetch();
+    uint16_t temp = (uint16_t)fetched + 1;
+    write(addr_abs, temp & 0x00FF);
+
+    uint16_t value = (temp & 0x00FF) ^ 0x00FF;
+    uint16_t sbc_temp = (uint16_t)a + value + (uint16_t)GetFlag(FLAGS6502::C);
+
+    SetFlag(FLAGS6502::C, sbc_temp > 0xFF);
+    SetFlag(FLAGS6502::Z, (sbc_temp & 0x00FF) == 0);
+    SetFlag(FLAGS6502::N, (sbc_temp & 0x80) != 0);
+    SetFlag(FLAGS6502::V, (~((uint16_t)a ^ value) & ((uint16_t)a ^ (uint16_t)sbc_temp)) & 0x0080);
+
+    a = sbc_temp & 0x00FF;
+    return 0;
+}
+
+// SLO = ASL + ORA
+uint8_t CPU6502::SLO() {
+    fetch();
+    uint16_t temp = (uint16_t)fetched << 1;
+    SetFlag(FLAGS6502::C, (temp & 0xFF00) != 0);
+    write(addr_abs, temp & 0x00FF);
+
+    a |= (temp & 0x00FF);
+    SetFlag(FLAGS6502::Z, a == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    return 0;
+}
+
+// RLA = ROL + AND
+uint8_t CPU6502::RLA() {
+    fetch();
+    uint16_t temp = (uint16_t)(fetched << 1) | GetFlag(FLAGS6502::C);
+    SetFlag(FLAGS6502::C, (temp & 0xFF00) != 0);
+    write(addr_abs, temp & 0x00FF);
+
+    a &= (temp & 0x00FF);
+    SetFlag(FLAGS6502::Z, a == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    return 0;
+}
+
+// SRE = LSR + EOR
+uint8_t CPU6502::SRE() {
+    fetch();
+    SetFlag(FLAGS6502::C, (fetched & 0x0001) != 0);
+    uint8_t temp = fetched >> 1;
+    write(addr_abs, temp);
+
+    a ^= temp;
+    SetFlag(FLAGS6502::Z, a == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    return 0;
+}
+
+// RRA = ROR + ADC
+uint8_t CPU6502::RRA() {
+    fetch();
+    bool bNewCarry = (fetched & 0x01) != 0;
+    uint16_t temp = (uint16_t)(fetched >> 1) | ((uint16_t)GetFlag(FLAGS6502::C) << 7);
+    SetFlag(FLAGS6502::C, bNewCarry);
+    write(addr_abs, temp & 0x00FF);
+
+    uint16_t adc_temp = (uint16_t)a + (temp & 0x00FF) + (uint16_t)GetFlag(FLAGS6502::C);
+    SetFlag(FLAGS6502::C, adc_temp > 0xFF);
+    SetFlag(FLAGS6502::Z, (adc_temp & 0x00FF) == 0);
+    SetFlag(FLAGS6502::N, (adc_temp & 0x80) != 0);
+    SetFlag(FLAGS6502::V, (~((uint16_t)a ^ (temp & 0x00FF)) & ((uint16_t)a ^ (uint16_t)adc_temp)) & 0x0080);
+
+    a = adc_temp & 0x00FF;
+    return 0;
+}
+
+
+
+
 
 // =========================================================================
 // АПАРАТНЕ ПЕРЕРИВАННЯ NMI (Non-Maskable Interrupt)
