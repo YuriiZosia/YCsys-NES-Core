@@ -30,11 +30,7 @@ public:
     Cartridge(const std::string& sFileName);
     ~Cartridge();
 
-    void reset() {
-        if (pMapper) {
-            pMapper->reset();
-        }
-	}
+	void reset(); // Скидання стану картриджа (наприклад, при натисканні Reset на консолі)
 
     // Зв'язок з головною шиною (Bus)
     bool cpuRead(uint16_t addr, uint8_t& data);
