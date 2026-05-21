@@ -43,6 +43,11 @@ public:
     bool ppuRead(uint16_t addr, uint8_t& data);
     bool ppuWrite(uint16_t addr, uint8_t data);
 
+	//Підтримка апарату переривань для маперів, які їх використовують
+    bool irqState() const { return pMapper ? pMapper->irqState() : false; }
+    void irqClear() { if (pMapper) pMapper->irqClear(); }
+    void scanline() { if (pMapper) pMapper->scanline(); }
+
     struct sHeader {
         char name[4];           // 'N', 'E', 'S', '\x1A'
         uint8_t prg_rom_chunks;
