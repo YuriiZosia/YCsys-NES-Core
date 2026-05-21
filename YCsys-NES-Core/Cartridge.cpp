@@ -79,6 +79,8 @@ Cartridge::Cartridge(const std::string& sFileName) : header{ 0 } {
         case 0: pMapper = std::make_shared<Mapper_000>(nPRGBanks, nCHRBanks); break;
 		case 1: pMapper = std::make_shared<Mapper_001>(nPRGBanks, nCHRBanks); break;
 		case 2: pMapper = std::make_shared<Mapper_002>(nPRGBanks, nCHRBanks); break;
+        case 3: pMapper = std::make_shared<Mapper_003>(nPRGBanks, nCHRBanks); break;
+        case 4: pMapper = std::make_shared<Mapper_004>(nPRGBanks, nCHRBanks); break;
             // У майбутньому тут будуть інші мапери (case 1:, case 2: і т.д.)
         }
 

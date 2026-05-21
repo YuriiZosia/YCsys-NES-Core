@@ -25,6 +25,8 @@
 #include "Mapper_000.h"
 #include "Mapper_001.h"
 #include "Mapper_002.h"
+#include "Mapper_003.h"
+#include "Mapper_004.h"
 
 class Cartridge {
 public:

@@ -35,6 +35,10 @@ public:
     virtual bool ppuMapWrite(uint16_t addr, uint32_t& mapped_addr) = 0;
     // ФІКС: Віртуальний метод reset(), щоб можна було скидати стан будь-якого мапера
     virtual void reset() = 0;
+	// Для MMC3 та інших маперів з перериваннями:
+    virtual bool irqState() { return false; } // Чи згенерував мапер переривання?
+    virtual void irqClear() {}                // Скидання прапорця переривання
+    virtual void scanline() {}                // Сигнал від PPU, що намальовано ще один рядок
 
 protected:
     uint8_t nPRGBanks = 0;
