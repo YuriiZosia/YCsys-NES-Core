@@ -23,6 +23,7 @@
 #include <fstream>
 #include <memory>
 #include "Mapper_000.h"
+#include "Mapper_001.h"
 #include "Mapper_002.h"
 
 class Cartridge {

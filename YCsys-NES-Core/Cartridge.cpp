@@ -77,6 +77,7 @@ Cartridge::Cartridge(const std::string& sFileName) : header{ 0 } {
         // Залежно від ID, створюємо відповідний об'єкт мапера і передаємо йому кількість банків
         switch (nMapperID) {
         case 0: pMapper = std::make_shared<Mapper_000>(nPRGBanks, nCHRBanks); break;
+		case 1: pMapper = std::make_shared<Mapper_001>(nPRGBanks, nCHRBanks); break;
 		case 2: pMapper = std::make_shared<Mapper_002>(nPRGBanks, nCHRBanks); break;
             // У майбутньому тут будуть інші мапери (case 1:, case 2: і т.д.)
         }
