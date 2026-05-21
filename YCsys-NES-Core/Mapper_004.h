@@ -36,6 +36,9 @@ public:
     void irqClear() override;
     void scanline() override;
 
+	// Динамічне дзеркало для MMC3
+    bool mirrorMode(uint8_t& mode) override;
+
 private:
     uint8_t nTargetRegister = 0x00;
     bool bPRGBankMode = false;
@@ -50,4 +53,6 @@ private:
     bool bIRQUpdate = false;
     uint16_t nIRQCounter = 0x0000;
     uint16_t nIRQLatch = 0x0000;
+
+    uint8_t nMirrorMode = 0; // 0 = Vertical, 1 = Horizontal
 };

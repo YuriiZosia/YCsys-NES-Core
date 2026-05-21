@@ -40,6 +40,9 @@ public:
     virtual void irqClear() {}                // Скидання прапорця переривання
     virtual void scanline() {}                // Сигнал від PPU, що намальовано ще один рядок
 
+    // Метод для маперів, які динамічно крутять дзеркало
+    virtual bool mirrorMode(uint8_t& mode) { return false; }
+
 protected:
     uint8_t nPRGBanks = 0;
     uint8_t nCHRBanks = 0;

@@ -84,6 +84,16 @@ Cartridge::Cartridge(const std::string& sFileName) : header{ 0 } {
             // У майбутньому тут будуть інші мапери (case 1:, case 2: і т.д.)
         }
 
+        // --- Ініціалізація PRG RAM (Батарейка збережень) ---
+        vPRGRAM.resize(8192, 0x00);
+        sSaveFile = sFileName + ".sav";
+        std::ifstream ifs(sSaveFile, std::ios::binary);
+        if (ifs.is_open()) {
+            ifs.read(reinterpret_cast<char*>(vPRGRAM.data()), vPRGRAM.size());
+            ifs.close();
+            std::cout << "Save file loaded: " << sSaveFile << std::endl;
+        }
+
         // Встановлюємо прапорець успішного завантаження
         bImageValid = true;
         ifs.close();
@@ -93,7 +103,14 @@ Cartridge::Cartridge(const std::string& sFileName) : header{ 0 } {
     }
 }
 
-Cartridge::~Cartridge() {}
+Cartridge::~Cartridge() {
+    // Зберігаємо PRG RAM у файл при виході з гри
+    std::ofstream ofs(sSaveFile, std::ios::binary);
+    if (ofs.is_open()) {
+        ofs.write(reinterpret_cast<char*>(vPRGRAM.data()), vPRGRAM.size());
+        ofs.close();
+    }
+}
 
 // ==========================================================
 // МАРШРУТИЗАЦІЯ ДЛЯ CPU (Процесор)
@@ -101,6 +118,13 @@ Cartridge::~Cartridge() {}
 
 bool Cartridge::cpuRead(uint16_t addr, uint8_t& data) {
     uint32_t mapped_addr = 0;
+
+    // Читання з PRG RAM (Збереження гри: $6000 - $7FFF)
+    if (addr >= 0x6000 && addr <= 0x7FFF) {
+        data = vPRGRAM[addr & 0x1FFF];
+        return true;
+    }
+
     // Питаємо мапер: "Чи є за цією адресою щось цікаве для CPU?"
     if (pMapper->cpuMapRead(addr, mapped_addr)) {
         // Якщо так, мапер повертає фізичну адресу (mapped_addr), і ми читаємо з масиву
@@ -112,13 +136,26 @@ bool Cartridge::cpuRead(uint16_t addr, uint8_t& data) {
 
 bool Cartridge::cpuWrite(uint16_t addr, uint8_t data) {
     uint32_t mapped_addr = 0;
+
+    // Запис у PRG RAM (Збереження гри: $6000 - $7FFF)
+    if (addr >= 0x6000 && addr <= 0x7FFF) {
+        vPRGRAM[addr & 0x1FFF] = data;
+        return true;
+    }
+
     // Питаємо мапер: "Чи дозволяєш ти запис за цією адресою?"
     // ФІКС: Передаємо data всередину мапера!
     if (pMapper->cpuMapWrite(addr, mapped_addr, data)) {
         // Якщо так, пишемо дані (зазвичай використовується для перемикання банків)
         vPRGMemory[mapped_addr] = data;
-        return true;
     }
+
+    // 3. Синхронізація динамічного віддзеркалення (ФІКС Chip 'n Dale!)
+    uint8_t mirrorMode;
+    if (pMapper->mirrorMode(mirrorMode)) {
+        mirror = (mirrorMode == 0) ? MIRROR::VERTICAL : MIRROR::HORIZONTAL;
+    }
+
     return false;
 }
 

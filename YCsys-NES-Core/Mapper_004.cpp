@@ -102,7 +102,13 @@ bool Mapper_004::cpuMapWrite(uint16_t addr, uint32_t& mapped_addr, uint8_t data)
         }
     }
     // Керування віддзеркаленням екрану та PRG RAM (ігноруємо для базового сетапу)
-    else if (addr >= 0xA000 && addr <= 0xBFFF) {}
+    else if (addr >= 0xA000 && addr <= 0xBFFF) {
+        if (!(addr & 0x0001)) {
+            // Парна адреса: Зміна віддзеркалення! (Біт 0: 0 = Vertical, 1 = Horizontal)
+            nMirrorMode = data & 0x01;
+        }
+        // Непарна адреса керує PRG RAM (захист від запису), ми поки це пропускаємо
+    }
     // Керування IRQ (Таймер рядків)
     else if (addr >= 0xC000 && addr <= 0xDFFF) {
         if (!(addr & 0x0001)) nIRQLatch = data;
@@ -157,4 +163,9 @@ bool Mapper_004::irqState() {
 
 void Mapper_004::irqClear() {
     bIRQActive = false;
+}
+
+bool Mapper_004::mirrorMode(uint8_t& mode) {
+    mode = nMirrorMode;
+    return true; // MMC3 підтримує динамічне дзеркало!
 }

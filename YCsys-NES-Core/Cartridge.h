@@ -82,4 +82,8 @@ private:
 
     // Вказівник на наш мапер
     std::shared_ptr<Mapper> pMapper;
+
+	// Додаткові поля для підтримки збережень (Save RAM)
+    std::vector<uint8_t> vPRGRAM; // Пам'ять збережень (8 КБ)
+    std::string sSaveFile;        // Шлях до файлу .sav
 };
