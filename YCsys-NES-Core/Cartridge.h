@@ -1,5 +1,5 @@
 /*
- * _________________________________________________________________________
+ *  _________________________________________________________________________
  * |     __   __  ______   ______              __    _  _______  _______     |
  * |     \ \ / / |  ____| |  ____|     _      |  \  | ||  _____||  _____|    |
  * |      \   /  | |      | |____     (_)     |   \ | || |_____ | |_____     |
@@ -23,11 +23,18 @@
 #include <fstream>
 #include <memory>
 #include "Mapper_000.h"
+#include "Mapper_002.h"
 
 class Cartridge {
 public:
     Cartridge(const std::string& sFileName);
     ~Cartridge();
+
+    void reset() {
+        if (pMapper) {
+            pMapper->reset();
+        }
+	}
 
     // Зв'язок з головною шиною (Bus)
     bool cpuRead(uint16_t addr, uint8_t& data);

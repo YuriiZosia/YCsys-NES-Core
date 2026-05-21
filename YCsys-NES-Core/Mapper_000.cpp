@@ -1,5 +1,5 @@
 /*
- * _________________________________________________________________________
+ *  _________________________________________________________________________
  * |     __   __  ______   ______              __    _  _______  _______     |
  * |     \ \ / / |  ____| |  ____|     _      |  \  | ||  _____||  _____|    |
  * |      \   /  | |      | |____     (_)     |   \ | || |_____ | |_____     |
@@ -22,6 +22,10 @@ Mapper_000::Mapper_000(uint8_t prgBanks, uint8_t chrBanks) : Mapper(prgBanks, ch
 
 Mapper_000::~Mapper_000() {}
 
+void Mapper_000::reset() {
+    // Мапер 000 не має внутрішнього стану, тому тут нічого не робимо
+}
+
 // Маршрутизація для CPU
 bool Mapper_000::cpuMapRead(uint16_t addr, uint32_t& mapped_addr) {
 	if (addr >= 0x8000 && addr <= 0xFFFF) { // Адресація для читання з PRG ROM починається з 0x8000 до 0xFFFF
@@ -31,7 +35,7 @@ bool Mapper_000::cpuMapRead(uint16_t addr, uint32_t& mapped_addr) {
     return false;
 }
 
-bool Mapper_000::cpuMapWrite(uint16_t addr, uint32_t& mapped_addr) {
+bool Mapper_000::cpuMapWrite(uint16_t addr, uint32_t& mapped_addr, uint8_t data) {
     if (addr >= 0x8000 && addr <= 0xFFFF) {
 		mapped_addr = addr & (nPRGBanks > 1 ? 0x7FFF : 0x3FFF); // Якщо є 2 банки, маскуємо адресацію на 32 КБ, інакше на 16 КБ
         return true;

@@ -1,5 +1,5 @@
 /*
- * _________________________________________________________________________
+ *  _________________________________________________________________________
  * |     __   __  ______   ______              __    _  _______  _______     |
  * |     \ \ / / |  ____| |  ____|     _      |  \  | ||  _____||  _____|    |
  * |      \   /  | |      | |____     (_)     |   \ | || |_____ | |_____     |
@@ -29,9 +29,12 @@ public:
 
     // Віртуальні функції, які обов'язково мають бути в усіх маперах
     virtual bool cpuMapRead(uint16_t addr, uint32_t& mapped_addr) = 0;
-    virtual bool cpuMapWrite(uint16_t addr, uint32_t& mapped_addr) = 0;
+    // ФІКС: Додав uint8_t data, щоб мапери могли читати команди процесора
+    virtual bool cpuMapWrite(uint16_t addr, uint32_t& mapped_addr, uint8_t data = 0) = 0;
     virtual bool ppuMapRead(uint16_t addr, uint32_t& mapped_addr) = 0;
     virtual bool ppuMapWrite(uint16_t addr, uint32_t& mapped_addr) = 0;
+    // ФІКС: Віртуальний метод reset(), щоб можна було скидати стан будь-якого мапера
+    virtual void reset() = 0;
 
 protected:
     uint8_t nPRGBanks = 0;

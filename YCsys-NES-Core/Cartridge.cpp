@@ -1,5 +1,5 @@
 /*
- * _________________________________________________________________________
+ *  _________________________________________________________________________
  * |     __   __  ______   ______              __    _  _______  _______     |
  * |     \ \ / / |  ____| |  ____|     _      |  \  | ||  _____||  _____|    |
  * |      \   /  | |      | |____     (_)     |   \ | || |_____ | |_____     |
@@ -77,6 +77,7 @@ Cartridge::Cartridge(const std::string& sFileName) : header{ 0 } {
         // Залежно від ID, створюємо відповідний об'єкт мапера і передаємо йому кількість банків
         switch (nMapperID) {
         case 0: pMapper = std::make_shared<Mapper_000>(nPRGBanks, nCHRBanks); break;
+		case 2: pMapper = std::make_shared<Mapper_002>(nPRGBanks, nCHRBanks); break;
             // У майбутньому тут будуть інші мапери (case 1:, case 2: і т.д.)
         }
 
@@ -109,7 +110,8 @@ bool Cartridge::cpuRead(uint16_t addr, uint8_t& data) {
 bool Cartridge::cpuWrite(uint16_t addr, uint8_t data) {
     uint32_t mapped_addr = 0;
     // Питаємо мапер: "Чи дозволяєш ти запис за цією адресою?"
-    if (pMapper->cpuMapWrite(addr, mapped_addr)) {
+    // ФІКС: Передаємо data всередину мапера!
+    if (pMapper->cpuMapWrite(addr, mapped_addr, data)) {
         // Якщо так, пишемо дані (зазвичай використовується для перемикання банків)
         vPRGMemory[mapped_addr] = data;
         return true;
@@ -139,4 +141,10 @@ bool Cartridge::ppuWrite(uint16_t addr, uint8_t data) {
         return true;
     }
     return false;
+}
+
+void Cartridge::reset() {
+    if (pMapper) {
+        pMapper->reset();
+    }
 }

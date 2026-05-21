@@ -9,25 +9,11 @@
  * |        Y C s y s                          N E S   C O R E               |
  * |_________________________________________________________________________|
  * |                                                                         |
- * |      [000] YCsys NES CORE - MAPPER 000 (NROM) IMPLEMENTATION [000]      |
+ * |      [004] YCsys NES CORE - MAPPER 004 (MMC3) IMPLEMENTATION [004]      |
  * |      Yurii Code system (YCsys) © 2026. Код, що працює, а не існує.      |
  * |      Started: 2026-05-11 | Project: YCsys-NES-Core                      |
  * |_________________________________________________________________________|
- * [NROM]        [16KB]        [32KB]        [BANK]        [NROM]
+ * [MMC3]        [IRQ ]        [SCAN]        [BANK]        [MMC3]
  */
 
 #pragma once
-#include "Mapper.h"
-
-class Mapper_000 : public Mapper {
-public:
-    Mapper_000(uint8_t prgBanks, uint8_t chrBanks);
-    ~Mapper_000();
-
-    // Перевизначаємо функції під конкретну логіку нульового мапера
-    bool cpuMapRead(uint16_t addr, uint32_t& mapped_addr) override;
-    bool cpuMapWrite(uint16_t addr, uint32_t& mapped_addr, uint8_t data = 0) override;
-    bool ppuMapRead(uint16_t addr, uint32_t& mapped_addr) override;
-    bool ppuMapWrite(uint16_t addr, uint32_t& mapped_addr) override;
-    void reset() override;
-};
