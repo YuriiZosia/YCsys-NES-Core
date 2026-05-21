@@ -116,9 +116,6 @@ public:
     uint8_t TXA();  uint8_t TXS();  uint8_t TYA();
     uint8_t PHA();  uint8_t PHP();  uint8_t PLA();  uint8_t PLP();
 
-	// --- Інструкції процесора Група Порівняння ---
-    uint8_t CMP();  uint8_t CPX();  uint8_t CPY();
-
     // --- Інструкції процесора Група Порівняння ---
     uint8_t CMP();  uint8_t CPX();  uint8_t CPY();
 

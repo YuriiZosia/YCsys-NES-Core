@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
     // The Legend of Zelda.nes
 	// Zelda II - The Adventure of Link.nes
 	// Tombs and Treasure.nes
-    std::shared_ptr<Cartridge> cart = std::make_shared<Cartridge>("games\\Chip and Dale Rescue Rangers.nes");
+    std::shared_ptr<Cartridge> cart = std::make_shared<Cartridge>("games\\Bomberman.nes");
 
     if (!cart->bImageValid) {
         std::cerr << "Помилка: Не вдалося завантажити ROM!" << std::endl;
