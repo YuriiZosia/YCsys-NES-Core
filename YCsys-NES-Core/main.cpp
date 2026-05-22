@@ -131,6 +131,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Опитування клавіатури
+        SDL_PumpEvents(); // Примусово "проштовхуємо" події Windows до масиву SDL
         const Uint8* state = SDL_GetKeyboardState(NULL);
         nes->controller[0] = 0x00;
 

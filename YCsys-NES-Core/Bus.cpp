@@ -139,17 +139,27 @@ uint8_t Bus::read(uint16_t addr, bool bReadOnly) {
     // 5. Контролери (Читання стану по одному біту за раз)
     else if (addr == 0x4016) {
         if (bStrobe) {
-            // Якщо строб активний, завжди повертаємо статус першої кнопки (A)
-            data = (controller_state[0] & 0x80) > 0 ? 1 : 0;
+            // Додаємо 0x40 (емуляція Open Bus), щоб гра не вважала контролер піратським!
+            data = ((controller_state[0] & 0x80) > 0 ? 1 : 0) | 0x40;
         }
         else {
-            data = (controller_state[0] & 0x80) > 0 ? 1 : 0;
+            data = ((controller_state[0] & 0x80) > 0 ? 1 : 0) | 0x40;
             // Зсуваємо регістр, щоб наступне читання віддало наступну кнопку
             controller_state[0] <<= 1;
             // ФІКС BOMBERMAN: Всі порожні зчитування контролера мають повертати 1!
             controller_state[0] |= 0x01;
         }
-        
+    }
+    // 6. Читаємо стан контролера 2
+    else if (addr == 0x4017) {
+        if (bStrobe) {
+            data = ((controller_state[1] & 0x80) > 0 ? 1 : 0) | 0x40;
+        }
+        else {
+            data = ((controller_state[1] & 0x80) > 0 ? 1 : 0) | 0x40;
+            controller_state[1] <<= 1;
+            controller_state[1] |= 0x01;
+        }
     }
 	// 6. Читаємо стан контролера 2
     else if (addr == 0x4017) {
