@@ -111,24 +111,71 @@ void PPU::clock() {
         bSpriteZeroHitPossible = false;
 
         while (nOAMEntry < 64 && sprite_count < 9) {
+            // Визначаємо поточний розмір спрайтів: 8x8 або 8x16 (біт 5 регістра PPUCTRL)
+            int spriteSize = (control & 0x20) ? 16 : 8;
+
             int16_t diff = static_cast<int16_t>(scanline) - static_cast<int16_t>(OAM[nOAMEntry].y);
 
-            // Якщо спрайт перетинає наш рядок (висота 8 пікселів)
-            if (diff >= 0 && diff < 8) {
+            // Якщо спрайт перетинає наш рядок (перевіряємо динамічну висоту!)
+            if (diff >= 0 && diff < spriteSize) {
                 if (sprite_count < 8) {
-                    if (nOAMEntry == 0) bSpriteZeroHitPossible = true; // Це Спрайт №0!
+                    if (nOAMEntry == 0) bSpriteZeroHitPossible = true; // Це Спрайт №0
 
                     spriteScanline[sprite_count] = OAM[nOAMEntry];
 
-                    uint16_t sprite_pattern_addr_lo = ((control & 0x08) ? 0x1000 : 0x0000)
-                        | (static_cast<uint16_t>(OAM[nOAMEntry].id) << 4)
-                        | static_cast<uint16_t>(diff);
+                    uint16_t sprite_pattern_addr_lo = 0;
 
-                    // Якщо спрайт перевернутий по вертикалі (біт 7)
-                    if (OAM[nOAMEntry].attribute & 0x80) {
-                        sprite_pattern_addr_lo = ((control & 0x08) ? 0x1000 : 0x0000)
-                            | (static_cast<uint16_t>(OAM[nOAMEntry].id) << 4)
-                            | static_cast<uint16_t>(7 - diff);
+                    if (!(control & 0x20)) {
+                        // ==========================================
+                        // РЕЖИМ 8x8 (Стандартний)
+                        // ==========================================
+                        if (!(OAM[nOAMEntry].attribute & 0x80)) {
+                            // Звичайний (не перевернутий)
+                            sprite_pattern_addr_lo = ((control & 0x08) ? 0x1000 : 0x0000)
+                                | (static_cast<uint16_t>(OAM[nOAMEntry].id) << 4)
+                                | static_cast<uint16_t>(diff);
+                        }
+                        else {
+                            // Перевернутий по вертикалі
+                            sprite_pattern_addr_lo = ((control & 0x08) ? 0x1000 : 0x0000)
+                                | (static_cast<uint16_t>(OAM[nOAMEntry].id) << 4)
+                                | static_cast<uint16_t>(7 - diff);
+                        }
+                    }
+                    else {
+                        // ==========================================
+                        // РЕЖИМ 8x16 (ФІКС ДЛЯ ZELDA II ТА ВИСОКИХ ПЕРСОНАЖІВ)
+                        // ==========================================
+                        if (!(OAM[nOAMEntry].attribute & 0x80)) {
+                            // Звичайний
+                            if (diff < 8) {
+                                // Малюємо верхню половину спрайта
+                                sprite_pattern_addr_lo = ((OAM[nOAMEntry].id & 0x01) ? 0x1000 : 0x0000)
+                                    | (static_cast<uint16_t>(OAM[nOAMEntry].id & 0xFE) << 4)
+                                    | static_cast<uint16_t>(diff);
+                            }
+                            else {
+                                // Малюємо нижню половину спрайта (наступний тайл)
+                                sprite_pattern_addr_lo = ((OAM[nOAMEntry].id & 0x01) ? 0x1000 : 0x0000)
+                                    | (static_cast<uint16_t>((OAM[nOAMEntry].id & 0xFE) + 1) << 4)
+                                    | static_cast<uint16_t>(diff - 8);
+                            }
+                        }
+                        else {
+                            // Перевернутий по вертикалі (міняємо половини місцями)
+                            if (diff < 8) {
+                                // Верхня половина екрана (відображає нижній тайл)
+                                sprite_pattern_addr_lo = ((OAM[nOAMEntry].id & 0x01) ? 0x1000 : 0x0000)
+                                    | (static_cast<uint16_t>((OAM[nOAMEntry].id & 0xFE) + 1) << 4)
+                                    | static_cast<uint16_t>(7 - diff);
+                            }
+                            else {
+                                // Нижня половина екрана (відображає верхній тайл)
+                                sprite_pattern_addr_lo = ((OAM[nOAMEntry].id & 0x01) ? 0x1000 : 0x0000)
+                                    | (static_cast<uint16_t>(OAM[nOAMEntry].id & 0xFE) << 4)
+                                    | static_cast<uint16_t>(15 - diff);
+                            }
+                        }
                     }
 
                     uint16_t sprite_pattern_addr_hi = sprite_pattern_addr_lo + 8;
@@ -150,7 +197,7 @@ void PPU::clock() {
                 sprite_count++;
             }
             nOAMEntry++;
-		}
+        }
         
         // Якщо більше 8 спрайтів на рядку - встановлюємо біт переповнення спрайтів
         if (sprite_count > 8) {
@@ -169,7 +216,6 @@ void PPU::clock() {
         uint8_t fg_palette = 0x00;
         uint8_t fg_priority = 0x00;
 
-        // --- Отримуємо піксель ФОНУ ---
         if (mask & 0x08) {
             uint16_t bit_mux = 0x8000 >> fine_x;
             uint8_t p0_pixel = (bg_shifter_pattern_lo & bit_mux) > 0;
@@ -201,6 +247,19 @@ void PPU::clock() {
             }
         }
 
+        // =================================================================
+        // ФІКС ZELDA II: МАСКУВАННЯ КРАЇВ (Відсікаємо ліві 8 пікселів)
+        // =================================================================
+        if (cycle >= 1 && cycle < 9) {
+            if (!(mask & 0x02)) {
+                bg_pixel = 0x00; // Повністю гасимо фон
+            }
+            if (!(mask & 0x04)) {
+                fg_pixel = 0x00; // Повністю гасимо спрайти
+                bSpriteZeroBeingRendered = false; // Скасовуємо колізію Sprite 0!
+            }
+        }
+
         // --- МУЛЬТИПЛЕКСОР (Хто перемагає на екрані?) ---
         uint8_t final_pixel = 0x00;
         uint8_t final_palette = 0x00;
@@ -223,13 +282,12 @@ void PPU::clock() {
                 final_palette = bg_palette;
             }
 
-            // Детекція Sprite 0 Hit (колізія)
+            // Детекція Sprite 0 Hit (Тепер вона працює бездоганно!)
             if (bSpriteZeroHitPossible && bSpriteZeroBeingRendered) {
                 if ((mask & 0x08) && (mask & 0x10)) {
-                    // Перевірка маскування лівого краю (8 пікселів)
-                    if (!(cycle >= 1 && cycle < 9 && !(mask & 0x02 || mask & 0x04))) {
-                        status |= 0x40; // Встановлюємо 6-й біт у $2002
-                    }
+                    // Перевірку cycle < 9 ми вже зробили вище! 
+                    // Тому якщо ми дійшли сюди — це 100% легальна колізія
+                    status |= 0x40; // Встановлюємо 6-й біт у $2002
                 }
             }
         }
