@@ -17,6 +17,7 @@
  */
 
 #include <iostream>
+#include <fstream>   // Додано для запису логів
 #include <windows.h>
 #pragma warning(push)
 #pragma warning(disable: 26819) // Вимикаємо попередження про fallthrough
@@ -28,6 +29,11 @@
 
  // Коефіцієнт масштабування вікна
 const int SCALE = 3;
+
+// =================================================================
+// РЕЖИМ ЖОРСТКОГО ТЕСТУВАННЯ (Nestest)
+// =================================================================
+const bool RUN_NESTEST = false;
 
 int main(int argc, char* argv[]) {
     // Встановлюємо кодування UTF-8 для консолі Windows
@@ -67,7 +73,6 @@ int main(int argc, char* argv[]) {
     // =================================================================
     // ЗАВАНТАЖЕННЯ ГРИ (ROM) ТА СТАРТ СИСТЕМИ
     // =================================================================
-
     // MarioBros.nes
     // Super Mario Bros.nes
     // Super Mario Bros. 2.nes
@@ -77,9 +82,17 @@ int main(int argc, char* argv[]) {
     // Castlevania.nes
     // Final Fantasy.nes
     // The Legend of Zelda.nes
-	// Zelda II - The Adventure of Link.nes
-	// Tombs and Treasure.nes
-    std::shared_ptr<Cartridge> cart = std::make_shared<Cartridge>("games\\Bomberman.nes");
+    // Zelda II - The Adventure of Link.nes
+    // Tombs and Treasure.nes
+
+    std::shared_ptr<Cartridge> cart;
+
+    if (RUN_NESTEST) {
+        cart = std::make_shared<Cartridge>("nestest.nes"); // Запуск з кореня
+    }
+    else {
+        cart = std::make_shared<Cartridge>("games\\Zelda II - The Adventure of Link.nes");
+    }
 
     if (!cart->bImageValid) {
         std::cerr << "Помилка: Не вдалося завантажити ROM!" << std::endl;
@@ -88,40 +101,52 @@ int main(int argc, char* argv[]) {
         nes->insertCartridge(cart);
     }
 
-	nes->cart->reset();
+    nes->cart->reset();
     nes->cpu.reset();
+
+    // nestest.nes вимагає примусового старту з 0xC000 для автоматичного режиму без графіки
+    if (RUN_NESTEST) {
+        nes->cpu.pc = 0xC000;
+    }
 
     // =================================================================
     // НАЛАШТУВАННЯ АУДІО СИСТЕМИ SDL2
     // =================================================================
     SDL_AudioSpec audio_spec{};
-    audio_spec.freq = 44100;          // Частота дискретизації (44.1 кГц)
-    audio_spec.format = AUDIO_F32SYS; // 32-бітний float
-    audio_spec.channels = 1;          // Моно
-    audio_spec.samples = 1024;        // Розмір звукового буфера
-    audio_spec.callback = nullptr;    // Вимикаємо Callback, пушимо звук вручну
+    audio_spec.freq = 44100;
+    audio_spec.format = AUDIO_F32SYS;
+    audio_spec.channels = 1;
+    audio_spec.samples = 1024;
+    audio_spec.callback = nullptr;
     audio_spec.userdata = nullptr;
 
     SDL_AudioDeviceID audio_device = SDL_OpenAudioDevice(nullptr, 0, &audio_spec, nullptr, 0);
     if (audio_device > 0) {
-        SDL_PauseAudioDevice(audio_device, 0); // Вмикаємо аудіо-пристрій
+        SDL_PauseAudioDevice(audio_device, 0);
     }
     else {
         std::cerr << "Audio Device Error: " << SDL_GetError() << std::endl;
+    }
+
+    // Підготовка файлу для логування
+    std::ofstream logfile;
+    if (RUN_NESTEST) {
+        logfile.open("yc_nestest_output.log");
     }
 
     // 3. Головний ігровий та графічний цикл
     bool bQuit = false;
     SDL_Event event;
 
-    // МАТЕМАТИКА СИНХРОНІЗАЦІЇ ТА ФІЛЬТРАЦІЇ (DSP)
     double dAudioTime = 0.0;
-    // Підлаштовуємо генерацію під реальну швидкість 60Hz VSYNC екрану (89342 тактів PPU на кадр * 60)
     const double dAudioTimePerSystemClock = 1.0 / 5360520.0;
     const double dAudioTimePerSample = 1.0 / 44100.0;
+    double dAudioSampleAccumulator = 0.0;
+    int nAudioSampleCount = 0;
 
-    double dAudioSampleAccumulator = 0.0; // Акумулятор мікро-семплів для Boxcar-фільтра
-    int nAudioSampleCount = 0;            // Лічильник зібраних кроків
+    // Локальні лічильники для Nestest
+    uint64_t total_cpu_cycles = 7; // Оригінальний лог nestest завжди стартує з 7 такту (наслідки reset)
+    uint32_t local_sys_clock = 0;
 
     while (!bQuit) {
         while (SDL_PollEvent(&event)) {
@@ -130,8 +155,7 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Опитування клавіатури
-        SDL_PumpEvents(); // Примусово "проштовхуємо" події Windows до масиву SDL
+        SDL_PumpEvents();
         const Uint8* state = SDL_GetKeyboardState(NULL);
         nes->controller[0] = 0x00;
 
@@ -144,41 +168,57 @@ int main(int argc, char* argv[]) {
         nes->controller[0] |= state[SDL_SCANCODE_LEFT] ? 0x02 : 0x00; // Left
         nes->controller[0] |= state[SDL_SCANCODE_RIGHT] ? 0x01 : 0x00; // Right
 
-        // КРУТИМО СИСТЕМНИЙ ГОДИННИК, поки PPU не завершить рендеринг повного кадру
+        // КРУТИМО СИСТЕМНИЙ ГОДИННИК
         while (!nes->ppu.frame_complete) {
+
+            // =====================================================
+            // ЛОГУВАННЯ NESTEST (Точно перед виконанням інструкції)
+            // =====================================================
+            if (RUN_NESTEST) {
+                // Перевіряємо, чи це такт CPU, чи не заморожений CPU (DMA), і чи він готовий читати нову інструкцію
+                if (local_sys_clock % 3 == 0 && nes->cpu.cycles == 0 && nes->dma_cycles == 0) {
+                    char buffer[256];
+                    // 44 пробіли замінюють відсутність дизасемблера для ідеального збігу колонок
+                    snprintf(buffer, sizeof(buffer),
+                        "%04X                                            A:%02X X:%02X Y:%02X P:%02X SP:%02X PPU:%3d,%3d CYC:%llu\n",
+                        nes->cpu.pc, nes->cpu.a, nes->cpu.x, nes->cpu.y, nes->cpu.status, nes->cpu.stkp,
+                        nes->ppu.scanline, nes->ppu.cycle, total_cpu_cycles);
+                    logfile << buffer;
+                }
+            }
+
+            // Робимо 1 системний крок
             nes->clock();
 
-            // Збираємо високочастотні амплітуди APU на кожному системному такті
+            if (local_sys_clock % 3 == 0) {
+                total_cpu_cycles++;
+            }
+            local_sys_clock++;
+
+            // Аудіо фільтрація
             dAudioSampleAccumulator += nes->apu.GetOutputSample();
             nAudioSampleCount++;
-
-            // Синхронізація та видача звуку в SDL за низькою частотою (44.1 кГц)
             dAudioTime += dAudioTimePerSystemClock;
             if (dAudioTime >= dAudioTimePerSample) {
                 dAudioTime -= dAudioTimePerSample;
-
-                // Boxcar-фільтрація: беремо середнє значення, усуваючи металевий скрегіт аліасингу
                 float sample = 0.0f;
                 if (nAudioSampleCount > 0) {
                     sample = static_cast<float>(dAudioSampleAccumulator / nAudioSampleCount);
                 }
                 SDL_QueueAudio(audio_device, &sample, sizeof(float));
-
-                // Очищення накопичувача для наступного аудіо-вікна
                 dAudioSampleAccumulator = 0.0;
                 nAudioSampleCount = 0;
             }
         }
         nes->ppu.frame_complete = false;
 
-        // 4. Оновлюємо текстуру вікна даними з нашого std::array
+        // Оновлюємо текстуру
         SDL_UpdateTexture(texture, nullptr, nes->ppu.sprScreen.data(), 256 * sizeof(uint32_t));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
     }
 
-    // Фінальне вивільнення ресурсів при закритті програми
     if (audio_device > 0) {
         SDL_CloseAudioDevice(audio_device);
     }

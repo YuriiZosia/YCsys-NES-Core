@@ -446,6 +446,26 @@ void CPU6502::clock() {
         case 0x0C: case 0x1C: case 0x3C: case 0x5C: case 0x7C: case 0xDC: case 0xFC:
             ABS(); NOP(); break;
 
+            // Специфічні нелегальні опкоди (потрібні для проходження Nestest)
+        case 0x0B: case 0x2B: IMM(); ANC(); break;
+        case 0x4B: IMM(); ALR(); break;
+        case 0x6B: IMM(); ARR(); break;
+        case 0xCB: IMM(); AXS(); break;
+        case 0x8B: IMM(); LXA(); break;
+
+            // Заглушки для вкрай нестабільних опкодів, щоб процесор "проковтнув" правильну кількість байт і не збився PC:
+        case 0x9B: ABY(); NOP(); break; // TAS
+        case 0xBB: ABY(); NOP(); break; // LAS
+        case 0x93: IZY(); NOP(); break; // AHX (IZY)
+        case 0x9F: ABY(); NOP(); break; // AHX (ABY)
+        case 0x9E: ABY(); NOP(); break; // SHX
+        case 0x9C: ABX(); NOP(); break; // SHY
+
+            // Опкоди JAM (KIL), які намертво вішають CPU. Пропускаємо їх як 1-байтний NOP.
+        case 0x02: case 0x12: case 0x22: case 0x32: case 0x42: case 0x52:
+        case 0x62: case 0x72: case 0x92: case 0xB2: case 0xD2: case 0xF2:
+            IMP(); NOP(); break;
+
             // =================================================================
             // Якщо опкод ще не реалізований або невідомий (нелегальний)
             // =================================================================
@@ -1386,7 +1406,55 @@ uint8_t CPU6502::RRA() {
     return 0;
 }
 
-
+// ANC (AND + Carry = N)
+uint8_t CPU6502::ANC() {
+    fetch();
+    a = a & fetched;
+    SetFlag(FLAGS6502::Z, a == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    SetFlag(FLAGS6502::C, (a & 0x80) != 0);
+    return 0;
+}
+// ALR (AND + LSR)
+uint8_t CPU6502::ALR() {
+    fetch();
+    a = a & fetched;
+    SetFlag(FLAGS6502::C, (a & 0x01) != 0);
+    a = a >> 1;
+    SetFlag(FLAGS6502::Z, a == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    return 0;
+}
+// ARR (AND + ROR)
+uint8_t CPU6502::ARR() {
+    fetch();
+    a = a & fetched;
+    uint8_t c = GetFlag(FLAGS6502::C);
+    SetFlag(FLAGS6502::C, (a & 0x80) != 0);
+    a = (a >> 1) | (c << 7);
+    SetFlag(FLAGS6502::Z, a == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    SetFlag(FLAGS6502::V, ((a ^ (a << 1)) & 0x40) != 0);
+    return 0;
+}
+// AXS (CMP + DEX)
+uint8_t CPU6502::AXS() {
+    fetch();
+    uint16_t temp = (uint16_t)(a & x) - (uint16_t)fetched;
+    SetFlag(FLAGS6502::C, (a & x) >= fetched);
+    SetFlag(FLAGS6502::Z, (temp & 0x00FF) == 0x0000);
+    SetFlag(FLAGS6502::N, (temp & 0x0080) != 0);
+    x = temp & 0x00FF;
+    return 0;
+}
+// LXA (Load X and A)
+uint8_t CPU6502::LXA() {
+    fetch();
+    a = x = fetched;
+    SetFlag(FLAGS6502::Z, a == 0x00);
+    SetFlag(FLAGS6502::N, (a & 0x80) != 0);
+    return 0;
+}
 
 
 

@@ -51,7 +51,7 @@ public:
     void reset() {                     // Скидання процесора до початкового стану
         a = x = y = 0x00;
         stkp = 0xFD;
-        status = 0x00 | FLAGS6502::U; // Встановлюємо прапорець U (завжди 1)
+        status = 0x00 | FLAGS6502::U | FLAGS6502::I; // Встановлюємо прапорець U (завжди 1) та FIX: I (забороняє переривання після скидання)
         pc = read(0xFFFC) | (read(0xFFFD) << 8); // Читаємо адреси з 0xFFFC/0xFFFD. Ці дві клітинки пам'яті називаються Reset Vector (Вектор скидання).
     }
 
@@ -122,6 +122,7 @@ public:
     // --- Неофіційні (нелегальні) інструкції ---
     uint8_t LAX(); uint8_t SAX(); uint8_t DCP(); uint8_t ISB();
     uint8_t SLO(); uint8_t RLA(); uint8_t SRE(); uint8_t RRA();
+    uint8_t ANC(); uint8_t ALR(); uint8_t ARR(); uint8_t AXS(); uint8_t LXA();
 
 
 private:
