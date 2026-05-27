@@ -1,116 +1,168 @@
-/*
- *  _________________________________________________________________________
- * |     __   __  ______   ______              __    _  _______  _______     |
- * |     \ \ / / |  ____| |  ____|     _      |  \  | ||  _____||  _____|    |
- * |      \   /  | |      | |____     (_)     |   \ | || |_____ | |_____     |
- * |       | |   | |      |____  |    _       | |\   ||  _____| \____  |     |
- * |       | |   | |____   ____| |   (_)      | | \  || |_____  _____| |     |
- * |       |_|   |______| |______|            |_|  \_||_______||_______|     |
- * |        Y C s y s                          N E S   C O R E               |
- * |_________________________________________________________________________|
- * |                                                                         |
- * |      [!]  YCsys NES CORE - MAIN ENTRY POINT & SYSTEM LOOP  [!]          |
- * |      Yurii Code system (YCsys) © 2026. Код, що працює, а не існує.      |
- * |      Started: 2026-05-11 | Project: YCsys-NES-Core                      |
- * |_________________________________________________________________________|
- * [PWR]        [JOY]        [RST]        [SYS]        [PWR]
- */
-
 #include <iostream>
-#include <fstream>   // Додано для запису логів
+#include <fstream>
+#include <string>
 #include <windows.h>
+#include <commdlg.h> // Для солідного меню вибору файлу
+
 #pragma warning(push)
-#pragma warning(disable: 26819) // Вимикаємо попередження про fallthrough
-#pragma warning(disable: 26451) // Вимикаємо попередження про переповнення для SDL
+#pragma warning(disable: 26819)
+#pragma warning(disable: 26451)
 #include <SDL.h>
 #pragma warning(pop)            
 
 #include "Bus.h"
 
- // Коефіцієнт масштабування вікна
 const int SCALE = 3;
 
 // =================================================================
-// РЕЖИМ ЖОРСТКОГО ТЕСТУВАННЯ (Nestest)
+// СИСТЕМА SAVE STATES (Швидке збереження / Завантаження)
 // =================================================================
-const bool RUN_NESTEST = false;
+static void SaveGameState(Bus* nes) {
+    std::ofstream out("ycsys_quick.savestate", std::ios::binary);
+    if (out.is_open()) {
+        // Зберігаємо стан процесора
+        out.write((char*)&nes->cpu.a, sizeof(uint8_t));
+        out.write((char*)&nes->cpu.x, sizeof(uint8_t));
+        out.write((char*)&nes->cpu.y, sizeof(uint8_t));
+        out.write((char*)&nes->cpu.pc, sizeof(uint16_t));
+        out.write((char*)&nes->cpu.stkp, sizeof(uint8_t));
+        out.write((char*)&nes->cpu.status, sizeof(uint8_t));
+        // Зберігаємо оперативну пам'ять
+        out.write((char*)nes->cpuRam.data(), 2048);
+        // Зберігаємо пам'ять картриджа (якщо є)
+        if (nes->cart && nes->cart->vPRGRAM.size() > 0) {
+            out.write((char*)nes->cart->vPRGRAM.data(), nes->cart->vPRGRAM.size());
+        }
+        out.close();
+        std::cout << "[YCsys] State Saved Successfully!" << std::endl;
+    }
+}
+
+static void LoadGameState(Bus* nes) {
+    std::ifstream in("ycsys_quick.savestate", std::ios::binary);
+    if (in.is_open()) {
+        in.read((char*)&nes->cpu.a, sizeof(uint8_t));
+        in.read((char*)&nes->cpu.x, sizeof(uint8_t));
+        in.read((char*)&nes->cpu.y, sizeof(uint8_t));
+        in.read((char*)&nes->cpu.pc, sizeof(uint16_t));
+        in.read((char*)&nes->cpu.stkp, sizeof(uint8_t));
+        in.read((char*)&nes->cpu.status, sizeof(uint8_t));
+        in.read((char*)nes->cpuRam.data(), 2048);
+        if (nes->cart && nes->cart->vPRGRAM.size() > 0) {
+            in.read((char*)nes->cart->vPRGRAM.data(), nes->cart->vPRGRAM.size());
+        }
+        in.close();
+        std::cout << "[YCsys] State Loaded Successfully!" << std::endl;
+    }
+}
+
+// =================================================================
+// ГОЛЛІВУДСЬКА BOOT-АНІМАЦІЯ (CRT EFFECT)
+// =================================================================
+static void PlayBootAnimation(SDL_Renderer* renderer) {
+    // 1. Ефект розгортки CRT-променя (вмикання телевізора)
+    for (int i = 0; i < 128; i += 4) {
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 200, 255, 255, 255);
+        SDL_Rect line = { (128 - i) * SCALE, 119 * SCALE, (i * 2) * SCALE, 2 * SCALE };
+        SDL_RenderFillRect(renderer, &line);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(10);
+    }
+    for (int i = 0; i < 120; i += 6) {
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 200, 255, 255, 255);
+        SDL_Rect rect = { 0, (120 - i) * SCALE, 256 * SCALE, (i * 2) * SCALE };
+        SDL_RenderFillRect(renderer, &rect);
+        SDL_RenderPresent(renderer);
+        SDL_Delay(10);
+    }
+
+    // 2. Спалах екрана та логотип YCsys
+    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_RenderClear(renderer);
+    SDL_RenderPresent(renderer);
+    SDL_Delay(100);
+
+    SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255);
+    SDL_RenderClear(renderer);
+
+    // Малюємо геометричне лого (YC)
+    SDL_SetRenderDrawColor(renderer, 255, 50, 50, 255);
+    SDL_Rect y1 = { 80 * SCALE, 80 * SCALE, 10 * SCALE, 30 * SCALE };
+    SDL_Rect y2 = { 100 * SCALE, 80 * SCALE, 10 * SCALE, 30 * SCALE };
+    SDL_Rect y3 = { 80 * SCALE, 110 * SCALE, 30 * SCALE, 10 * SCALE };
+    SDL_Rect y4 = { 90 * SCALE, 110 * SCALE, 10 * SCALE, 30 * SCALE };
+    SDL_RenderFillRect(renderer, &y1); SDL_RenderFillRect(renderer, &y2);
+    SDL_RenderFillRect(renderer, &y3); SDL_RenderFillRect(renderer, &y4);
+
+    SDL_SetRenderDrawColor(renderer, 50, 200, 255, 255);
+    SDL_Rect c1 = { 130 * SCALE, 80 * SCALE, 30 * SCALE, 10 * SCALE };
+    SDL_Rect c2 = { 130 * SCALE, 80 * SCALE, 10 * SCALE, 60 * SCALE };
+    SDL_Rect c3 = { 130 * SCALE, 130 * SCALE, 30 * SCALE, 10 * SCALE };
+    SDL_RenderFillRect(renderer, &c1); SDL_RenderFillRect(renderer, &c2); SDL_RenderFillRect(renderer, &c3);
+
+    SDL_RenderPresent(renderer);
+    SDL_Delay(1500); // Милуємося логотипом
+}
+
+// =================================================================
+// НАДІЙНЕ МЕНЮ ВИБОРУ ІГОР (Windows Native API)
+// =================================================================
+static std::string SelectRomFile() {
+    char filename[MAX_PATH] = { 0 };
+    OPENFILENAMEA ofn;
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFilter = "NES ROM Files (*.nes)\0*.nes\0All Files (*.*)\0*.*\0";
+    ofn.lpstrFile = filename;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrTitle = "YCsys BIOS - Select Game ROM";
+    ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST;
+
+    if (GetOpenFileNameA(&ofn)) {
+        return std::string(filename);
+    }
+    return "";
+}
 
 int main(int argc, char* argv[]) {
-    // Встановлюємо кодування UTF-8 для консолі Windows
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 
-    // 1. Ініціалізація підсистем ВІДЕО та АУДІО SDL2
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) {
-        std::cerr << "SDL Initialization Error: " << SDL_GetError() << std::endl;
-        return -1;
-    }
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) return -1;
 
-    SDL_Window* window = SDL_CreateWindow(
-        "YCsys NES Core",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        256 * SCALE, 240 * SCALE,
-        SDL_WINDOW_SHOWN
-    );
-
-    if (!window) {
-        std::cerr << "Window Creation Error: " << SDL_GetError() << std::endl;
-        SDL_Quit();
-        return -1;
-    }
-
+    SDL_Window* window = SDL_CreateWindow("YCsys NES Core", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 256 * SCALE, 240 * SCALE, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    SDL_Texture* texture = SDL_CreateTexture(
-        renderer,
-        SDL_PIXELFORMAT_ARGB8888,
-        SDL_TEXTUREACCESS_STREAMING,
-        256, 240
-    );
+    SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 256, 240);
 
-    // 2. Створюємо екземпляр віртуальної консолі у Купі
+    // Граємо анімацію перед стартом
+    PlayBootAnimation(renderer);
+
+    // Викликаємо солідне меню вибору гри
+    std::string romPath = SelectRomFile();
+    if (romPath.empty()) {
+        std::cout << "Гру не вибрано. Вихід..." << std::endl;
+        SDL_Quit();
+        return 0;
+    }
+
     Bus* nes = new Bus();
-
-    // =================================================================
-    // ЗАВАНТАЖЕННЯ ГРИ (ROM) ТА СТАРТ СИСТЕМИ
-    // =================================================================
-    // MarioBros.nes
-    // Super Mario Bros.nes
-    // Super Mario Bros. 2.nes
-    // Super Mario Bros. 3.nes
-    // Chip and Dale Rescue Rangers.nes
-    // Bomberman.nes
-    // Castlevania.nes
-    // Final Fantasy.nes
-    // The Legend of Zelda.nes
-    // Zelda II - The Adventure of Link.nes
-    // Tombs and Treasure.nes
-
-    std::shared_ptr<Cartridge> cart;
-
-    if (RUN_NESTEST) {
-        cart = std::make_shared<Cartridge>("nestest.nes"); // Запуск з кореня
-    }
-    else {
-        cart = std::make_shared<Cartridge>("games\\Zelda II - The Adventure of Link.nes");
-    }
+    std::shared_ptr<Cartridge> cart = std::make_shared<Cartridge>(romPath);
 
     if (!cart->bImageValid) {
-        std::cerr << "Помилка: Не вдалося завантажити ROM!" << std::endl;
+        std::cerr << "Помилка завантаження ROM!" << std::endl;
+        return -1;
     }
-    else {
-        nes->insertCartridge(cart);
-    }
-
+    nes->insertCartridge(cart);
     nes->cart->reset();
     nes->cpu.reset();
 
-    // nestest.nes вимагає примусового старту з 0xC000 для автоматичного режиму без графіки
-    if (RUN_NESTEST) {
-        nes->cpu.pc = 0xC000;
-    }
-
     // =================================================================
-    // НАЛАШТУВАННЯ АУДІО СИСТЕМИ SDL2
+    // НАЛАШТУВАННЯ АУДІО
     // =================================================================
     SDL_AudioSpec audio_spec{};
     audio_spec.freq = 44100;
@@ -118,23 +170,10 @@ int main(int argc, char* argv[]) {
     audio_spec.channels = 1;
     audio_spec.samples = 1024;
     audio_spec.callback = nullptr;
-    audio_spec.userdata = nullptr;
 
     SDL_AudioDeviceID audio_device = SDL_OpenAudioDevice(nullptr, 0, &audio_spec, nullptr, 0);
-    if (audio_device > 0) {
-        SDL_PauseAudioDevice(audio_device, 0);
-    }
-    else {
-        std::cerr << "Audio Device Error: " << SDL_GetError() << std::endl;
-    }
+    if (audio_device > 0) SDL_PauseAudioDevice(audio_device, 0);
 
-    // Підготовка файлу для логування
-    std::ofstream logfile;
-    if (RUN_NESTEST) {
-        logfile.open("yc_nestest_output.log");
-    }
-
-    // 3. Головний ігровий та графічний цикл
     bool bQuit = false;
     SDL_Event event;
 
@@ -144,15 +183,18 @@ int main(int argc, char* argv[]) {
     double dAudioSampleAccumulator = 0.0;
     int nAudioSampleCount = 0;
 
-    // Локальні лічильники для Nestest
-    uint64_t total_cpu_cycles = 7; // Оригінальний лог nestest завжди стартує з 7 такту (наслідки reset)
-    uint32_t local_sys_clock = 0;
+    // Змінні для Low-Pass фільтра
+    float lpf_out1 = 0.0f;
+    float lpf_out2 = 0.0f;
+    const float lpf_cutoff = 0.12f; // Чим менше значення, тим сильніше зрізає металевий скрегіт
+
+    // Флаги для кнопок збереження (щоб не спрацьовували по 10 разів за одне натискання)
+    bool bF5_Pressed = false;
+    bool bF7_Pressed = false;
 
     while (!bQuit) {
         while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_QUIT) {
-                bQuit = true;
-            }
+            if (event.type == SDL_QUIT) bQuit = true;
         }
 
         SDL_PumpEvents();
@@ -168,60 +210,52 @@ int main(int argc, char* argv[]) {
         nes->controller[0] |= state[SDL_SCANCODE_LEFT] ? 0x02 : 0x00; // Left
         nes->controller[0] |= state[SDL_SCANCODE_RIGHT] ? 0x01 : 0x00; // Right
 
-        // КРУТИМО СИСТЕМНИЙ ГОДИННИК
+        // Save State Logic (F5 = Зберегти, F7 = Завантажити)
+        if (state[SDL_SCANCODE_F5]) {
+            if (!bF5_Pressed) { SaveGameState(nes); bF5_Pressed = true; }
+        }
+        else { bF5_Pressed = false; }
+
+        if (state[SDL_SCANCODE_F7]) {
+            if (!bF7_Pressed) { LoadGameState(nes); bF7_Pressed = true; }
+        }
+        else { bF7_Pressed = false; }
+
         while (!nes->ppu.frame_complete) {
-
-            // =====================================================
-            // ЛОГУВАННЯ NESTEST (Точно перед виконанням інструкції)
-            // =====================================================
-            if (RUN_NESTEST) {
-                // Перевіряємо, чи це такт CPU, чи не заморожений CPU (DMA), і чи він готовий читати нову інструкцію
-                if (local_sys_clock % 3 == 0 && nes->cpu.cycles == 0 && nes->dma_cycles == 0) {
-                    char buffer[256];
-                    // 44 пробіли замінюють відсутність дизасемблера для ідеального збігу колонок
-                    snprintf(buffer, sizeof(buffer),
-                        "%04X                                            A:%02X X:%02X Y:%02X P:%02X SP:%02X PPU:%3d,%3d CYC:%llu\n",
-                        nes->cpu.pc, nes->cpu.a, nes->cpu.x, nes->cpu.y, nes->cpu.status, nes->cpu.stkp,
-                        nes->ppu.scanline, nes->ppu.cycle, total_cpu_cycles);
-                    logfile << buffer;
-                }
-            }
-
-            // Робимо 1 системний крок
             nes->clock();
 
-            if (local_sys_clock % 3 == 0) {
-                total_cpu_cycles++;
-            }
-            local_sys_clock++;
-
-            // Аудіо фільтрація
             dAudioSampleAccumulator += nes->apu.GetOutputSample();
             nAudioSampleCount++;
             dAudioTime += dAudioTimePerSystemClock;
+
             if (dAudioTime >= dAudioTimePerSample) {
                 dAudioTime -= dAudioTimePerSample;
-                float sample = 0.0f;
+                float raw_sample = 0.0f;
                 if (nAudioSampleCount > 0) {
-                    sample = static_cast<float>(dAudioSampleAccumulator / nAudioSampleCount);
+                    raw_sample = static_cast<float>(dAudioSampleAccumulator / nAudioSampleCount);
                 }
-                SDL_QueueAudio(audio_device, &sample, sizeof(float));
+
+                // =====================================================
+                // ДВОПОЛЮСНИЙ LOW-PASS ФІЛЬТР (Теплий ламповий звук)
+                // =====================================================
+                lpf_out1 += lpf_cutoff * (raw_sample - lpf_out1);
+                lpf_out2 += lpf_cutoff * (lpf_out1 - lpf_out2);
+                float final_sample = lpf_out2;
+
+                SDL_QueueAudio(audio_device, &final_sample, sizeof(float));
                 dAudioSampleAccumulator = 0.0;
                 nAudioSampleCount = 0;
             }
         }
         nes->ppu.frame_complete = false;
 
-        // Оновлюємо текстуру
         SDL_UpdateTexture(texture, nullptr, nes->ppu.sprScreen.data(), 256 * sizeof(uint32_t));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
     }
 
-    if (audio_device > 0) {
-        SDL_CloseAudioDevice(audio_device);
-    }
+    if (audio_device > 0) SDL_CloseAudioDevice(audio_device);
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);

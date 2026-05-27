@@ -72,10 +72,14 @@ public:
 
     MIRROR mirror = MIRROR::HORIZONTAL;
 
-private:
+public:
     std::vector<uint8_t> vPRGMemory;
     std::vector<uint8_t> vCHRMemory;
+    // Додаткові поля для підтримки збережень (Save RAM)
+    std::vector<uint8_t> vPRGRAM; // Пам'ять збережень (8 КБ)
+    std::string sSaveFile;        // Шлях до файлу .sav
 
+private:
     uint8_t nPRGBanks = 0;
     uint8_t nCHRBanks = 0;
     uint8_t nMapperID = 0;
@@ -83,7 +87,5 @@ private:
     // Вказівник на наш мапер
     std::shared_ptr<Mapper> pMapper;
 
-	// Додаткові поля для підтримки збережень (Save RAM)
-    std::vector<uint8_t> vPRGRAM; // Пам'ять збережень (8 КБ)
-    std::string sSaveFile;        // Шлях до файлу .sav
+	
 };
