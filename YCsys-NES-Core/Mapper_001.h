@@ -30,6 +30,8 @@ public:
     bool ppuMapRead(uint16_t addr, uint32_t& mapped_addr) override;
     bool ppuMapWrite(uint16_t addr, uint32_t& mapped_addr) override;
 
+    bool mirrorMode(uint8_t& mode) override;
+
     void reset() override;
 
 private:

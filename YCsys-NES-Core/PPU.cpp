@@ -87,7 +87,7 @@ void PPU::clock() {
         // ФІКС ДЛЯ MMC3: Саме тут PPU офіційно закінчив видимий рядок. 
             // Якщо у нас є картридж (і це MMC3), він повинен перерахувати свій таймер.
             // Але сигнал передається ТІЛЬКИ якщо включений рендер фону або спрайтів!
-        if (cart && (mask & 0x18)) {
+        if (cart && (mask & 0x18) && cycle == 260) {
             cart->scanline();
         }
 
@@ -557,6 +557,12 @@ uint8_t PPU::ppuRead(uint16_t addr, bool rdonly) {
             else if (addr >= 0x0C00 && addr <= 0x0FFF)
                 data = tblName[1][addr & 0x03FF];
         }
+        else if (current_mirror == Cartridge::MIRROR::ONESCREEN_LO) {
+            data = tblName[0][addr & 0x03FF];   // або = data у ppuWrite
+        }
+        else if (current_mirror == Cartridge::MIRROR::ONESCREEN_HI) {
+            data = tblName[1][addr & 0x03FF];
+        }
     }
     // 3. Читання Палітр (Кольори)
     else if (addr >= 0x3F00 && addr <= 0x3FFF) {
@@ -610,6 +616,13 @@ void PPU::ppuWrite(uint16_t addr, uint8_t data) {
             else if (addr >= 0x0C00 && addr <= 0x0FFF)
                 tblName[1][addr & 0x03FF] = data;
         }
+        else if (current_mirror == Cartridge::MIRROR::ONESCREEN_LO) {
+            tblName[0][addr & 0x03FF] = data;
+        }
+        else if (current_mirror == Cartridge::MIRROR::ONESCREEN_HI) {
+            tblName[1][addr & 0x03FF] = data;
+        }
+
     }
     // 3. Запис Палітр (Кольори)
     else if (addr >= 0x3F00 && addr <= 0x3FFF) {

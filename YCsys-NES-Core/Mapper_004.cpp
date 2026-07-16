@@ -166,6 +166,6 @@ void Mapper_004::irqClear() {
 }
 
 bool Mapper_004::mirrorMode(uint8_t& mode) {
-    mode = nMirrorMode;
+    mode = nMirrorMode ? 3 : 2; // 0(vertical)->2, 1(horizontal)->3
     return true; // MMC3 підтримує динамічне дзеркало!
 }

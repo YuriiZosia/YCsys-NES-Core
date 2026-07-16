@@ -151,3 +151,8 @@ bool Mapper_001::ppuMapWrite(uint16_t addr, uint32_t& mapped_addr) {
     }
     return false;
 }
+
+bool Mapper_001::mirrorMode(uint8_t& mode) {
+    mode = nControlRegister & 0x03;
+    return true;
+}

@@ -151,9 +151,15 @@ bool Cartridge::cpuWrite(uint16_t addr, uint8_t data) {
     }
 
     // 3. Синхронізація динамічного віддзеркалення (ФІКС Chip 'n Dale!)
-    uint8_t mirrorMode;
-    if (pMapper->mirrorMode(mirrorMode)) {
-        mirror = (mirrorMode == 0) ? MIRROR::VERTICAL : MIRROR::HORIZONTAL;
+    uint8_t mirrorModeValue;
+    if (pMapper->mirrorMode(mirrorModeValue)) {
+        // mirror = (mirrorMode == 0) ? MIRROR::VERTICAL : MIRROR::HORIZONTAL;
+        switch (mirrorModeValue) {
+        case 0: mirror = MIRROR::ONESCREEN_LO; break;
+        case 1: mirror = MIRROR::ONESCREEN_HI; break;
+        case 2: mirror = MIRROR::VERTICAL;     break;
+        case 3: mirror = MIRROR::HORIZONTAL;   break;
+        }
     }
 
     return false;
