@@ -203,6 +203,17 @@ static std::string SelectRomFile() {
     return "";
 }
 
+// =================================================================
+// ТРЕЙСЕР PC (діагностика зависань)
+// =================================================================
+#include <set>
+#include <iomanip>
+
+static std::set<uint16_t> pcVisited;
+static int traceFrameCounter = 0;
+
+
+
 int main(int argc, char* argv[]) {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
@@ -282,6 +293,9 @@ int main(int argc, char* argv[]) {
 
     bool bPaused = false;
 
+	// для трейсера PC
+    bool bF9_Pressed = false;
+
     // Змінні "Машини часу"
     std::deque<GameState> rewindBuffer;
     const size_t MAX_REWIND_STATES = 150; // 5 секунд (при 30 знімках на секунду)
@@ -331,6 +345,24 @@ int main(int argc, char* argv[]) {
             nes->controller[0] |= pad_Lf ? 0x02 : 0x00;
             nes->controller[0] |= pad_Rt ? 0x01 : 0x00;
         }
+
+		// керування трейсером PC (F9)
+        if (state[SDL_SCANCODE_F9]) {
+            if (!bF9_Pressed) {
+                std::cout << "\n[TRACE] === Знімок PC ===" << std::endl;
+                std::cout << "PC = $" << std::hex << std::uppercase << nes->cpu.pc << std::dec << std::endl;
+                std::cout << "Опкоди навколо: ";
+                for (int i = -2; i <= 5; i++) {
+                    uint16_t addr = nes->cpu.pc + i;
+                    uint8_t byte = nes->read(addr, true); // true = не чіпаємо стан заліза (readonly)
+                    std::cout << (i == 0 ? "[" : "") << std::hex << std::setw(2) << std::setfill('0')
+                        << (int)byte << (i == 0 ? "]" : "") << " ";
+                }
+                std::cout << std::dec << std::endl;
+                bF9_Pressed = true;
+            }
+        }
+        else { bF9_Pressed = false; }
 
         // Керування збереженням на диск
         if (state[SDL_SCANCODE_F5]) {
@@ -422,6 +454,27 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 nes->ppu.frame_complete = false;
+
+                // --- Трейсер: збираємо відвідані адреси PC ---
+                pcVisited.insert(nes->cpu.pc);
+                traceFrameCounter++;
+
+                if (traceFrameCounter >= 180) { // приблизно раз на 3 секунди при 60 fps
+                    std::cout << "[TRACE] За останні " << traceFrameCounter
+                        << " кадрів CPU відвідав " << pcVisited.size()
+                        << " різних адрес PC." << std::endl;
+
+                    if (pcVisited.size() < 15) {
+                        std::cout << "[TRACE] СХОЖЕ НА ЗАЦИКЛЕННЯ! Адреси: ";
+                        for (uint16_t addr : pcVisited) {
+                            std::cout << "$" << std::hex << std::uppercase << addr << " ";
+                        }
+                        std::cout << std::dec << std::endl;
+                    }
+
+                    pcVisited.clear();
+                    traceFrameCounter = 0;
+                }
 
                 frame_counter++;
                 if (frame_counter % 2 == 0) {
