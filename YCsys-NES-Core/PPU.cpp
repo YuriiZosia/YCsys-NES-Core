@@ -30,6 +30,7 @@ void PPU::clock() {
     if (scanline == -1 && cycle == 1) {
         bSpriteZeroHitPossible = false; // Скидаємо прапорець можливості Sprite Zero Hit на початку кадру
         status &= ~0xE0; //Очищуємо одним махом (це скине біти 7, 6 та 5 одночасно) VBlank (0x80), Sprite Zero Hit (0x40) та Sprite Overflow (0x20)
+        nmi_occurred = false; // ФІКС: Надійно знімаємо сигнал NMI після закінчення VBlank
 	}
 
 	// =====================================================================
@@ -426,6 +427,7 @@ uint8_t PPU::cpuRead(uint16_t addr, bool rdonly) {
         if (!rdonly) {
             status &= ~0x80;   // Апаратна особливість: читання статусу скидає прапорець VBlank (7-й біт)
             address_latch = 0; // Чищення статусу також повністю скидає адресний тригер $2006
+            nmi_occurred = false; // ФІКС: Миттєво скасовуємо будь-яке заплановане NMI!
         }
         break;
     case 0x0003: // $2003 - OAMADDR
@@ -475,6 +477,9 @@ void PPU::cpuWrite(uint16_t addr, uint8_t data) {
         // зациклить переривання нескінченно і CPU ніколи не поверне керування.
         if (!nmi_was_enabled && nmi_now_enabled && (status & 0x80)) {
             nmi_occurred = true;
+        }
+        else if (!nmi_now_enabled) {
+            nmi_occurred = false; // ФІКС: Миттєво скасовуємо NMI, якщо гра його вимкнула!
         }
         break;
     }
