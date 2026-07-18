@@ -359,6 +359,12 @@ int main(int argc, char* argv[]) {
                         << (int)byte << (i == 0 ? "]" : "") << " ";
                 }
                 std::cout << std::dec << std::endl;
+                std::cout << "[TRACE] ppu.status = $" << std::hex << (int)nes->ppu.status
+                    << " | scanline=" << std::dec << nes->ppu.scanline
+                    << " cycle=" << nes->ppu.cycle
+                    << " | NMI enable (control bit7) = " << ((nes->ppu.control & 0x80) ? "1" : "0")
+                    << " | NMI fire count = " << nes->ppu.nmiFireCount
+                    << std::endl;
                 bF9_Pressed = true;
             }
         }
@@ -463,6 +469,8 @@ int main(int argc, char* argv[]) {
                     std::cout << "[TRACE] За останні " << traceFrameCounter
                         << " кадрів CPU відвідав " << pcVisited.size()
                         << " різних адрес PC." << std::endl;
+
+                    std::cout << "[TRACE] NMI спрацювань з початку роботи: " << nes->ppu.nmiFireCount << std::endl;
 
                     if (pcVisited.size() < 15) {
                         std::cout << "[TRACE] СХОЖЕ НА ЗАЦИКЛЕННЯ! Адреси: ";

@@ -40,6 +40,8 @@ public:
     uint8_t ppuRead(uint16_t addr, bool rdonly = false);
     void ppuWrite(uint16_t addr, uint8_t data);
 
+	uint32_t nmiFireCount = 0; // для тестування та налагодження: кількість викликів NMI
+
 public: // --- Графічний вивід та синхронізація кадрів ---
     // Буфер екрану (256x240). Використовуємо безпечний std::array із зануленням
     std::array<uint32_t, 256 * 240> sprScreen{};
@@ -112,9 +114,11 @@ private:
 
 private: 
     // --- Регістри стану PPU (Нові змінні) ---
+public: // тимчасово для трейсування
     uint8_t control = 0x00;         // $2000 - PPUCTRL (Налаштування генерації NMI, розміру спрайтів тощо)
     uint8_t mask = 0x00;            // $2001 - PPUMASK (Керування рендером фону, спрайтів, кольоровими ефектами)
     uint8_t status = 0x00;          // $2002 - PPUSTATUS (Прапорці VBlank, Спрайт 0, Переповнення спрайтів)
+private:
     uint8_t address_latch = 0;      // Адресний тригер: 0 = чекаємо старший байт, 1 = чекаємо молодший байт
     uint8_t ppu_data_buffer = 0x00; // Внутрішній буфер затримки читання для регістра PPUDATA ($2007)
 

@@ -323,6 +323,7 @@ void PPU::clock() {
 
         if (control & 0x80) { // Якщо NMI дозволено в PPUCTRL
             nmi_occurred = true; // Викидаємо прапорець переривання на шину
+			nmiFireCount++; // Збільшуємо лічильник викликів NMI, для трейсування та налагодження
         }
     }
 
@@ -459,17 +460,24 @@ uint8_t PPU::cpuRead(uint16_t addr, bool rdonly) {
 void PPU::cpuWrite(uint16_t addr, uint8_t data) {
     switch (addr) {
     case 0x0000: // $2000 - PPUCTRL
+    {
+        bool nmi_was_enabled = (control & 0x80) != 0;
+
         control = data;
-        // Нижні 2 біти PPUCTRL вказують на стартову таблицю імен (екран)
         t.nametable_x = control & 0x01;
         t.nametable_y = (control & 0x02) >> 1;
 
-        // ФІКС: Якщо ми вже у періоді VBlank і гра щойно дозволила NMI —
-            // генеруємо сигнал переривання негайно, щоб уникнути зависання
-        if ((control & 0x80) && (status & 0x80)) {
+        bool nmi_now_enabled = (control & 0x80) != 0;
+
+        // ФІКС: додатковий NMI генеруємо ТІЛЬКИ на фронті вмикання (0 -> 1),
+        // а не щоразу, коли NMI і так вже був увімкнений і vblank ще триває.
+        // Інакше гра, що щокадру перезаписує PPUCTRL з уже активним NMI,
+        // зациклить переривання нескінченно і CPU ніколи не поверне керування.
+        if (!nmi_was_enabled && nmi_now_enabled && (status & 0x80)) {
             nmi_occurred = true;
         }
         break;
+    }
     case 0x0001: // $2001 - PPUMASK
         mask = data;
         break;
