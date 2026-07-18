@@ -21,10 +21,10 @@
 #include <string>
 #include <windows.h>
 #include <commdlg.h> 
-#include <deque>  // Для кільцевого буфера "Машини часу"
+#include <deque>
 #include <vector>
 #include <array>
-#include <algorithm>
+#include <algorithm> // Для std::copy
 
 #pragma warning(push)
 #pragma warning(disable: 26819)
@@ -34,15 +34,13 @@
 
 #include "Bus.h"
 
-const int SCALE = 3;
+ // Глобальний масштаб екрана (динамічний)
+int current_scale = 3;
 
 // =================================================================
 // СИСТЕМА МАШИНИ ЧАСУ (REWIND RING BUFFER)
 // =================================================================
-
-// Структура для зберігання одного мікро-знімка системи
 struct GameState {
-    // Ініціалізуємо всі змінні нулями, щоб задовольнити суворі перевірки (type.6)
     uint8_t cpu_a = 0;
     uint8_t cpu_x = 0;
     uint8_t cpu_y = 0;
@@ -52,9 +50,6 @@ struct GameState {
 
     std::array<uint8_t, 2048> cpuRam{};
     std::vector<uint8_t> prgRam;
-
-    // ФІКС: Використовуємо динамічний вектор замість статичного масиву. 
-    // Це переносить 245 КБ даних у Heap і рятує стек від переповнення!
     std::vector<uint32_t> screen;
 };
 
@@ -72,12 +67,10 @@ static void CaptureState(Bus* nes, std::deque<GameState>& buffer, size_t max_siz
         state.prgRam = nes->cart->vPRGRAM;
     }
 
-    // Копіюємо дані масиву sprScreen у динамічний вектор
     state.screen.assign(nes->ppu.sprScreen.begin(), nes->ppu.sprScreen.end());
 
     buffer.push_back(std::move(state));
 
-    // Якщо перевищили ліміт пам'яті (наприклад, 5 секунд) — видаляємо найстаріший кадр
     if (buffer.size() > max_size) {
         buffer.pop_front();
     }
@@ -96,7 +89,6 @@ static void RestoreState(Bus* nes, const GameState& state) {
         nes->cart->vPRGRAM = state.prgRam;
     }
 
-    // Безпечно повертаємо зображення з вектора назад у масив PPU
     if (state.screen.size() == nes->ppu.sprScreen.size()) {
         std::copy(state.screen.begin(), state.screen.end(), nes->ppu.sprScreen.begin());
     }
@@ -149,7 +141,7 @@ static void PlayBootAnimation(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
         SDL_SetRenderDrawColor(renderer, 200, 255, 255, 255);
-        SDL_Rect line = { (128 - i) * SCALE, 119 * SCALE, (i * 2) * SCALE, 2 * SCALE };
+        SDL_Rect line = { (128 - i) * current_scale, 119 * current_scale, (i * 2) * current_scale, 2 * current_scale };
         SDL_RenderFillRect(renderer, &line);
         SDL_RenderPresent(renderer);
         SDL_Delay(10);
@@ -158,7 +150,7 @@ static void PlayBootAnimation(SDL_Renderer* renderer) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
         SDL_SetRenderDrawColor(renderer, 200, 255, 255, 255);
-        SDL_Rect rect = { 0, (120 - i) * SCALE, 256 * SCALE, (i * 2) * SCALE };
+        SDL_Rect rect = { 0, (120 - i) * current_scale, 256 * current_scale, (i * 2) * current_scale };
         SDL_RenderFillRect(renderer, &rect);
         SDL_RenderPresent(renderer);
         SDL_Delay(10);
@@ -173,17 +165,17 @@ static void PlayBootAnimation(SDL_Renderer* renderer) {
     SDL_RenderClear(renderer);
 
     SDL_SetRenderDrawColor(renderer, 255, 50, 50, 255);
-    SDL_Rect y1 = { 80 * SCALE, 80 * SCALE, 10 * SCALE, 30 * SCALE };
-    SDL_Rect y2 = { 100 * SCALE, 80 * SCALE, 10 * SCALE, 30 * SCALE };
-    SDL_Rect y3 = { 80 * SCALE, 110 * SCALE, 30 * SCALE, 10 * SCALE };
-    SDL_Rect y4 = { 90 * SCALE, 110 * SCALE, 10 * SCALE, 30 * SCALE };
+    SDL_Rect y1 = { 80 * current_scale, 80 * current_scale, 10 * current_scale, 30 * current_scale };
+    SDL_Rect y2 = { 100 * current_scale, 80 * current_scale, 10 * current_scale, 30 * current_scale };
+    SDL_Rect y3 = { 80 * current_scale, 110 * current_scale, 30 * current_scale, 10 * current_scale };
+    SDL_Rect y4 = { 90 * current_scale, 110 * current_scale, 10 * current_scale, 30 * current_scale };
     SDL_RenderFillRect(renderer, &y1); SDL_RenderFillRect(renderer, &y2);
     SDL_RenderFillRect(renderer, &y3); SDL_RenderFillRect(renderer, &y4);
 
     SDL_SetRenderDrawColor(renderer, 50, 200, 255, 255);
-    SDL_Rect c1 = { 130 * SCALE, 80 * SCALE, 30 * SCALE, 10 * SCALE };
-    SDL_Rect c2 = { 130 * SCALE, 80 * SCALE, 10 * SCALE, 60 * SCALE };
-    SDL_Rect c3 = { 130 * SCALE, 130 * SCALE, 30 * SCALE, 10 * SCALE };
+    SDL_Rect c1 = { 130 * current_scale, 80 * current_scale, 30 * current_scale, 10 * current_scale };
+    SDL_Rect c2 = { 130 * current_scale, 80 * current_scale, 10 * current_scale, 60 * current_scale };
+    SDL_Rect c3 = { 130 * current_scale, 130 * current_scale, 30 * current_scale, 10 * current_scale };
     SDL_RenderFillRect(renderer, &c1); SDL_RenderFillRect(renderer, &c2); SDL_RenderFillRect(renderer, &c3);
 
     SDL_RenderPresent(renderer);
@@ -217,7 +209,7 @@ int main(int argc, char* argv[]) {
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) return -1;
 
-    SDL_Window* window = SDL_CreateWindow("YCsys NES Core", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 256 * SCALE, 240 * SCALE, SDL_WINDOW_SHOWN);
+    SDL_Window* window = SDL_CreateWindow("YCsys NES Core", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 256 * current_scale, 240 * current_scale, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 256, 240);
 
@@ -267,8 +259,14 @@ int main(int argc, char* argv[]) {
     float lpf_out2 = 0.0f;
     const float lpf_cutoff = 0.12f;
 
+    // Флаги управління системою
     bool bF5_Pressed = false;
     bool bF7_Pressed = false;
+    bool bP_Pressed = false;
+    bool bPlus_Pressed = false;
+    bool bMinus_Pressed = false;
+
+    bool bPaused = false;
 
     // Змінні "Машини часу"
     std::deque<GameState> rewindBuffer;
@@ -305,57 +303,93 @@ int main(int argc, char* argv[]) {
         else { bF7_Pressed = false; }
 
         // =================================================================
-        // ЛОГІКА МАШИНИ ЧАСУ (Відмотування)
+        // ЛОГІКА ІНТЕРФЕЙСУ (Пауза та Масштабування)
         // =================================================================
-        bool bRewinding = state[SDL_SCANCODE_BACKSPACE];
-
-        if (bRewinding) {
-            if (!rewindBuffer.empty()) {
-                // Витягуємо останній кадр і завантажуємо його
-                RestoreState(nes, rewindBuffer.back());
-                rewindBuffer.pop_back();
-
-                // Штучна затримка, щоб ми бачили плавний рух назад (а не пролетіли 5 секунд за мить)
-                SDL_Delay(16);
+        if (state[SDL_SCANCODE_P]) {
+            if (!bP_Pressed) {
+                bPaused = !bPaused;
+                bP_Pressed = true;
             }
-            // ВАЖЛИВО: під час перемотування ми ПРОПУСКАЄМО виконання інструкцій процесора і звуку!
+        }
+        else { bP_Pressed = false; }
+
+        bool scale_changed = false;
+        // Підтримка кнопок "+" (на основній клавіатурі та NumPad)
+        if (state[SDL_SCANCODE_EQUALS] || state[SDL_SCANCODE_KP_PLUS]) {
+            if (!bPlus_Pressed) {
+                if (current_scale < 7) { current_scale++; scale_changed = true; }
+                bPlus_Pressed = true;
+            }
+        }
+        else { bPlus_Pressed = false; }
+
+        // Підтримка кнопок "-" (на основній клавіатурі та NumPad)
+        if (state[SDL_SCANCODE_MINUS] || state[SDL_SCANCODE_KP_MINUS]) {
+            if (!bMinus_Pressed) {
+                if (current_scale > 3) { current_scale--; scale_changed = true; }
+                bMinus_Pressed = true;
+            }
+        }
+        else { bMinus_Pressed = false; }
+
+        if (scale_changed) {
+            SDL_SetWindowSize(window, 256 * current_scale, 240 * current_scale);
+            SDL_SetWindowPosition(window, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED);
+        }
+
+        // =================================================================
+        // ГОЛОВНИЙ ЦИКЛ ГРИ (Пауза / Перемотування / Нормальний хід)
+        // =================================================================
+        if (bPaused) {
+            SDL_PauseAudioDevice(audio_device, 1); // Апаратно глушимо звук
+            SDL_Delay(16); // Віддаємо ресурси системі, щоб не гріти процесор
         }
         else {
-            // ЗВИЧАЙНИЙ РЕЖИМ ГРИ
-            while (!nes->ppu.frame_complete) {
-                nes->clock();
+            SDL_PauseAudioDevice(audio_device, 0); // Повертаємо звук
 
-                dAudioSampleAccumulator += nes->apu.GetOutputSample();
-                nAudioSampleCount++;
-                dAudioTime += dAudioTimePerSystemClock;
+            bool bRewinding = state[SDL_SCANCODE_BACKSPACE];
 
-                if (dAudioTime >= dAudioTimePerSample) {
-                    dAudioTime -= dAudioTimePerSample;
-                    float raw_sample = 0.0f;
-                    if (nAudioSampleCount > 0) {
-                        raw_sample = static_cast<float>(dAudioSampleAccumulator / nAudioSampleCount);
-                    }
-
-                    // Low-Pass фільтр
-                    lpf_out1 += lpf_cutoff * (raw_sample - lpf_out1);
-                    lpf_out2 += lpf_cutoff * (lpf_out1 - lpf_out2);
-                    float final_sample = lpf_out2;
-
-                    SDL_QueueAudio(audio_device, &final_sample, sizeof(float));
-                    dAudioSampleAccumulator = 0.0;
-                    nAudioSampleCount = 0;
+            if (bRewinding) {
+                if (!rewindBuffer.empty()) {
+                    RestoreState(nes, rewindBuffer.back());
+                    rewindBuffer.pop_back();
+                    SDL_Delay(16);
                 }
             }
-            nes->ppu.frame_complete = false;
+            else {
+                while (!nes->ppu.frame_complete) {
+                    nes->clock();
 
-            // Зберігаємо поточний стан у кільцевий буфер кожен другий кадр (30 FPS для знімків)
-            frame_counter++;
-            if (frame_counter % 2 == 0) {
-                CaptureState(nes, rewindBuffer, MAX_REWIND_STATES);
+                    dAudioSampleAccumulator += nes->apu.GetOutputSample();
+                    nAudioSampleCount++;
+                    dAudioTime += dAudioTimePerSystemClock;
+
+                    if (dAudioTime >= dAudioTimePerSample) {
+                        dAudioTime -= dAudioTimePerSample;
+                        float raw_sample = 0.0f;
+                        if (nAudioSampleCount > 0) {
+                            raw_sample = static_cast<float>(dAudioSampleAccumulator / nAudioSampleCount);
+                        }
+
+                        lpf_out1 += lpf_cutoff * (raw_sample - lpf_out1);
+                        lpf_out2 += lpf_cutoff * (lpf_out1 - lpf_out2);
+                        float final_sample = lpf_out2;
+
+                        SDL_QueueAudio(audio_device, &final_sample, sizeof(float));
+                        dAudioSampleAccumulator = 0.0;
+                        nAudioSampleCount = 0;
+                    }
+                }
+                nes->ppu.frame_complete = false;
+
+                frame_counter++;
+                if (frame_counter % 2 == 0) {
+                    CaptureState(nes, rewindBuffer, MAX_REWIND_STATES);
+                }
             }
         }
 
-        // Оновлюємо текстуру (працює і для звичайної гри, і для перемотування!)
+        // Рендеринг екрана працює незалежно від того, граємо ми, мотаємо час чи стоїмо на паузі
         SDL_UpdateTexture(texture, nullptr, nes->ppu.sprScreen.data(), 256 * sizeof(uint32_t));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
