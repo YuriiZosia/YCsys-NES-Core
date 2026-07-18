@@ -420,6 +420,12 @@ uint8_t PPU::cpuRead(uint16_t addr, bool rdonly) {
     case 0x0001: // $2001 - PPUMASK (Тільки для запису)
         break;
     case 0x0002: // $2002 - PPUSTATUS
+        // ФІКС "VBLANK STEAL DEADLOCK": Зазираємо в майбутнє на 1 інструкцію!
+            // Якщо процесор читає статус за 11 тактів до VBlank (кінець 240-го рядка),
+            // ми віддаємо йому 0x80 завчасно, щоб скомпенсувати ранній fetch() у CPU.
+        if (scanline == 240 && cycle >= 330) {
+            status |= 0x80;
+        }
         // Читаємо 3 старші біти реального статусу. Молодші 5 бітів фізично не підключені 
         // на платі NES до цього регістра, тому там залишається "сміття" з буфера даних.
         data = (status & 0xE0) | (ppu_data_buffer & 0x1F);
@@ -427,7 +433,7 @@ uint8_t PPU::cpuRead(uint16_t addr, bool rdonly) {
         if (!rdonly) {
             status &= ~0x80;   // Апаратна особливість: читання статусу скидає прапорець VBlank (7-й біт)
             address_latch = 0; // Чищення статусу також повністю скидає адресний тригер $2006
-            nmi_occurred = false; // ФІКС: Миттєво скасовуємо будь-яке заплановане NMI!
+            nmi_occurred = false;
         }
         break;
     case 0x0003: // $2003 - OAMADDR

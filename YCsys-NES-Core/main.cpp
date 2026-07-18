@@ -313,7 +313,7 @@ int main(int argc, char* argv[]) {
         nes->controller[0] |= state[SDL_SCANCODE_X] ? 0x80 : 0x00;
         nes->controller[0] |= state[SDL_SCANCODE_Z] ? 0x40 : 0x00;
         nes->controller[0] |= state[SDL_SCANCODE_A] ? 0x20 : 0x00;
-        nes->controller[0] |= state[SDL_SCANCODE_S] ? 0x10 : 0x00;
+        nes->controller[0] |= state[SDL_SCANCODE_S] || state[SDL_SCANCODE_RETURN] ? 0x10 : 0x00;
         nes->controller[0] |= state[SDL_SCANCODE_UP] ? 0x08 : 0x00;
         nes->controller[0] |= state[SDL_SCANCODE_DOWN] ? 0x04 : 0x00;
         nes->controller[0] |= state[SDL_SCANCODE_LEFT] ? 0x02 : 0x00;
