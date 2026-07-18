@@ -1,8 +1,30 @@
+/*
+ * _________________________________________________________________________
+ * |     __   __  ______   ______              __    _  _______  _______     |
+ * |     \ \ / / |  ____| |  ____|     _      |  \  | ||  _____||  _____|    |
+ * |      \   /  | |      | |____     (_)     |   \ | || |_____ | |_____     |
+ * |       | |   | |      |____  |    _       | |\   ||  _____| \____  |     |
+ * |       | |   | |____   ____| |   (_)      | | \  || |_____  _____| |     |
+ * |       |_|   |______| |______|            |_|  \_||_______||_______|     |
+ * |        Y C s y s                          N E S   C O R E               |
+ * |_________________________________________________________________________|
+ * |                                                                         |
+ * |      [!]  YCsys NES CORE - MAIN ENTRY POINT & SYSTEM LOOP  [!]          |
+ * |      Yurii Code system (YCsys) © 2026. Код, що працює, а не існує.      |
+ * |      Started: 2026-05-11 | Project: YCsys-NES-Core                      |
+ * |_________________________________________________________________________|
+ * [PWR]        [JOY]        [RST]        [SYS]        [PWR]
+ */
+
 #include <iostream>
 #include <fstream>
 #include <string>
 #include <windows.h>
-#include <commdlg.h> // Для солідного меню вибору файлу
+#include <commdlg.h> 
+#include <deque>  // Для кільцевого буфера "Машини часу"
+#include <vector>
+#include <array>
+
 
 #pragma warning(push)
 #pragma warning(disable: 26819)
@@ -15,30 +37,81 @@
 const int SCALE = 3;
 
 // =================================================================
-// СИСТЕМА SAVE STATES (Швидке збереження / Завантаження)
+// СИСТЕМА МАШИНИ ЧАСУ (REWIND RING BUFFER)
 // =================================================================
-static void SaveGameState(Bus* nes) {
+
+// Структура для зберігання одного мікро-знімка системи
+struct GameState {
+    uint8_t cpu_a, cpu_x, cpu_y, cpu_stkp, cpu_status;
+    uint16_t cpu_pc;
+    std::array<uint8_t, 2048> cpuRam;
+    std::vector<uint8_t> prgRam;
+    std::array<uint32_t, 256 * 240> screen; // Візуальний кадр для плавного перемотування!
+};
+
+static void CaptureState(Bus* nes, std::deque<GameState>& buffer, size_t max_size) {
+    GameState state;
+    state.cpu_a = nes->cpu.a;
+    state.cpu_x = nes->cpu.x;
+    state.cpu_y = nes->cpu.y;
+    state.cpu_pc = nes->cpu.pc;
+    state.cpu_stkp = nes->cpu.stkp;
+    state.cpu_status = nes->cpu.status;
+    state.cpuRam = nes->cpuRam;
+
+    if (nes->cart && nes->cart->vPRGRAM.size() > 0) {
+        state.prgRam = nes->cart->vPRGRAM;
+    }
+
+    state.screen = nes->ppu.sprScreen; // Зберігаємо картинку
+
+    buffer.push_back(std::move(state));
+
+    // Якщо перевищили ліміт пам'яті (наприклад, 5 секунд) — видаляємо найстаріший кадр
+    if (buffer.size() > max_size) {
+        buffer.pop_front();
+    }
+}
+
+static void RestoreState(Bus* nes, const GameState& state) {
+    nes->cpu.a = state.cpu_a;
+    nes->cpu.x = state.cpu_x;
+    nes->cpu.y = state.cpu_y;
+    nes->cpu.pc = state.cpu_pc;
+    nes->cpu.stkp = state.cpu_stkp;
+    nes->cpu.status = state.cpu_status;
+    nes->cpuRam = state.cpuRam;
+
+    if (nes->cart && nes->cart->vPRGRAM.size() > 0 && state.prgRam.size() > 0) {
+        nes->cart->vPRGRAM = state.prgRam;
+    }
+
+    nes->ppu.sprScreen = state.screen; // Миттєво повертаємо зображення на екран
+}
+
+
+// =================================================================
+// СИСТЕМА SAVE STATES (Швидке збереження на диск)
+// =================================================================
+static void SaveGameToDisk(Bus* nes) {
     std::ofstream out("ycsys_quick.savestate", std::ios::binary);
     if (out.is_open()) {
-        // Зберігаємо стан процесора
         out.write((char*)&nes->cpu.a, sizeof(uint8_t));
         out.write((char*)&nes->cpu.x, sizeof(uint8_t));
         out.write((char*)&nes->cpu.y, sizeof(uint8_t));
         out.write((char*)&nes->cpu.pc, sizeof(uint16_t));
         out.write((char*)&nes->cpu.stkp, sizeof(uint8_t));
         out.write((char*)&nes->cpu.status, sizeof(uint8_t));
-        // Зберігаємо оперативну пам'ять
         out.write((char*)nes->cpuRam.data(), 2048);
-        // Зберігаємо пам'ять картриджа (якщо є)
         if (nes->cart && nes->cart->vPRGRAM.size() > 0) {
             out.write((char*)nes->cart->vPRGRAM.data(), nes->cart->vPRGRAM.size());
         }
         out.close();
-        std::cout << "[YCsys] State Saved Successfully!" << std::endl;
+        std::cout << "[YCsys] State Saved Successfully to Disk!" << std::endl;
     }
 }
 
-static void LoadGameState(Bus* nes) {
+static void LoadGameFromDisk(Bus* nes) {
     std::ifstream in("ycsys_quick.savestate", std::ios::binary);
     if (in.is_open()) {
         in.read((char*)&nes->cpu.a, sizeof(uint8_t));
@@ -52,15 +125,14 @@ static void LoadGameState(Bus* nes) {
             in.read((char*)nes->cart->vPRGRAM.data(), nes->cart->vPRGRAM.size());
         }
         in.close();
-        std::cout << "[YCsys] State Loaded Successfully!" << std::endl;
+        std::cout << "[YCsys] State Loaded Successfully from Disk!" << std::endl;
     }
 }
 
 // =================================================================
-// ГОЛЛІВУДСЬКА BOOT-АНІМАЦІЯ (CRT EFFECT)
+// ГОЛЛІВУДСЬКА BOOT-АНІМАЦІЯ
 // =================================================================
 static void PlayBootAnimation(SDL_Renderer* renderer) {
-    // 1. Ефект розгортки CRT-променя (вмикання телевізора)
     for (int i = 0; i < 128; i += 4) {
         SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
         SDL_RenderClear(renderer);
@@ -80,7 +152,6 @@ static void PlayBootAnimation(SDL_Renderer* renderer) {
         SDL_Delay(10);
     }
 
-    // 2. Спалах екрана та логотип YCsys
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
     SDL_RenderPresent(renderer);
@@ -89,7 +160,6 @@ static void PlayBootAnimation(SDL_Renderer* renderer) {
     SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255);
     SDL_RenderClear(renderer);
 
-    // Малюємо геометричне лого (YC)
     SDL_SetRenderDrawColor(renderer, 255, 50, 50, 255);
     SDL_Rect y1 = { 80 * SCALE, 80 * SCALE, 10 * SCALE, 30 * SCALE };
     SDL_Rect y2 = { 100 * SCALE, 80 * SCALE, 10 * SCALE, 30 * SCALE };
@@ -105,11 +175,11 @@ static void PlayBootAnimation(SDL_Renderer* renderer) {
     SDL_RenderFillRect(renderer, &c1); SDL_RenderFillRect(renderer, &c2); SDL_RenderFillRect(renderer, &c3);
 
     SDL_RenderPresent(renderer);
-    SDL_Delay(1500); // Милуємося логотипом
+    SDL_Delay(1500);
 }
 
 // =================================================================
-// НАДІЙНЕ МЕНЮ ВИБОРУ ІГОР (Windows Native API)
+// НАДІЙНЕ МЕНЮ ВИБОРУ ІГОР
 // =================================================================
 static std::string SelectRomFile() {
     char filename[MAX_PATH] = { 0 };
@@ -139,10 +209,8 @@ int main(int argc, char* argv[]) {
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 256, 240);
 
-    // Граємо анімацію перед стартом
     PlayBootAnimation(renderer);
 
-    // Викликаємо солідне меню вибору гри
     std::string romPath = SelectRomFile();
     if (romPath.empty()) {
         std::cout << "Гру не вибрано. Вихід..." << std::endl;
@@ -183,14 +251,17 @@ int main(int argc, char* argv[]) {
     double dAudioSampleAccumulator = 0.0;
     int nAudioSampleCount = 0;
 
-    // Змінні для Low-Pass фільтра
     float lpf_out1 = 0.0f;
     float lpf_out2 = 0.0f;
-    const float lpf_cutoff = 0.12f; // Чим менше значення, тим сильніше зрізає металевий скрегіт
+    const float lpf_cutoff = 0.12f;
 
-    // Флаги для кнопок збереження (щоб не спрацьовували по 10 разів за одне натискання)
     bool bF5_Pressed = false;
     bool bF7_Pressed = false;
+
+    // Змінні "Машини часу"
+    std::deque<GameState> rewindBuffer;
+    const size_t MAX_REWIND_STATES = 150; // 5 секунд (при 30 знімках на секунду)
+    int frame_counter = 0;
 
     while (!bQuit) {
         while (SDL_PollEvent(&event)) {
@@ -199,56 +270,80 @@ int main(int argc, char* argv[]) {
 
         SDL_PumpEvents();
         const Uint8* state = SDL_GetKeyboardState(NULL);
+
         nes->controller[0] = 0x00;
+        nes->controller[0] |= state[SDL_SCANCODE_X] ? 0x80 : 0x00;
+        nes->controller[0] |= state[SDL_SCANCODE_Z] ? 0x40 : 0x00;
+        nes->controller[0] |= state[SDL_SCANCODE_A] ? 0x20 : 0x00;
+        nes->controller[0] |= state[SDL_SCANCODE_S] ? 0x10 : 0x00;
+        nes->controller[0] |= state[SDL_SCANCODE_UP] ? 0x08 : 0x00;
+        nes->controller[0] |= state[SDL_SCANCODE_DOWN] ? 0x04 : 0x00;
+        nes->controller[0] |= state[SDL_SCANCODE_LEFT] ? 0x02 : 0x00;
+        nes->controller[0] |= state[SDL_SCANCODE_RIGHT] ? 0x01 : 0x00;
 
-        nes->controller[0] |= state[SDL_SCANCODE_X] ? 0x80 : 0x00; // A
-        nes->controller[0] |= state[SDL_SCANCODE_Z] ? 0x40 : 0x00; // B
-        nes->controller[0] |= state[SDL_SCANCODE_A] ? 0x20 : 0x00; // Select
-        nes->controller[0] |= state[SDL_SCANCODE_S] ? 0x10 : 0x00; // Start
-        nes->controller[0] |= state[SDL_SCANCODE_UP] ? 0x08 : 0x00; // Up
-        nes->controller[0] |= state[SDL_SCANCODE_DOWN] ? 0x04 : 0x00; // Down
-        nes->controller[0] |= state[SDL_SCANCODE_LEFT] ? 0x02 : 0x00; // Left
-        nes->controller[0] |= state[SDL_SCANCODE_RIGHT] ? 0x01 : 0x00; // Right
-
-        // Save State Logic (F5 = Зберегти, F7 = Завантажити)
+        // Керування збереженням на диск
         if (state[SDL_SCANCODE_F5]) {
-            if (!bF5_Pressed) { SaveGameState(nes); bF5_Pressed = true; }
+            if (!bF5_Pressed) { SaveGameToDisk(nes); bF5_Pressed = true; }
         }
         else { bF5_Pressed = false; }
 
         if (state[SDL_SCANCODE_F7]) {
-            if (!bF7_Pressed) { LoadGameState(nes); bF7_Pressed = true; }
+            if (!bF7_Pressed) { LoadGameFromDisk(nes); bF7_Pressed = true; }
         }
         else { bF7_Pressed = false; }
 
-        while (!nes->ppu.frame_complete) {
-            nes->clock();
+        // =================================================================
+        // ЛОГІКА МАШИНИ ЧАСУ (Відмотування)
+        // =================================================================
+        bool bRewinding = state[SDL_SCANCODE_BACKSPACE];
 
-            dAudioSampleAccumulator += nes->apu.GetOutputSample();
-            nAudioSampleCount++;
-            dAudioTime += dAudioTimePerSystemClock;
+        if (bRewinding) {
+            if (!rewindBuffer.empty()) {
+                // Витягуємо останній кадр і завантажуємо його
+                RestoreState(nes, rewindBuffer.back());
+                rewindBuffer.pop_back();
 
-            if (dAudioTime >= dAudioTimePerSample) {
-                dAudioTime -= dAudioTimePerSample;
-                float raw_sample = 0.0f;
-                if (nAudioSampleCount > 0) {
-                    raw_sample = static_cast<float>(dAudioSampleAccumulator / nAudioSampleCount);
+                // Штучна затримка, щоб ми бачили плавний рух назад (а не пролетіли 5 секунд за мить)
+                SDL_Delay(16);
+            }
+            // ВАЖЛИВО: під час перемотування ми ПРОПУСКАЄМО виконання інструкцій процесора і звуку!
+        }
+        else {
+            // ЗВИЧАЙНИЙ РЕЖИМ ГРИ
+            while (!nes->ppu.frame_complete) {
+                nes->clock();
+
+                dAudioSampleAccumulator += nes->apu.GetOutputSample();
+                nAudioSampleCount++;
+                dAudioTime += dAudioTimePerSystemClock;
+
+                if (dAudioTime >= dAudioTimePerSample) {
+                    dAudioTime -= dAudioTimePerSample;
+                    float raw_sample = 0.0f;
+                    if (nAudioSampleCount > 0) {
+                        raw_sample = static_cast<float>(dAudioSampleAccumulator / nAudioSampleCount);
+                    }
+
+                    // Low-Pass фільтр
+                    lpf_out1 += lpf_cutoff * (raw_sample - lpf_out1);
+                    lpf_out2 += lpf_cutoff * (lpf_out1 - lpf_out2);
+                    float final_sample = lpf_out2;
+
+                    SDL_QueueAudio(audio_device, &final_sample, sizeof(float));
+                    dAudioSampleAccumulator = 0.0;
+                    nAudioSampleCount = 0;
                 }
+            }
+            nes->ppu.frame_complete = false;
 
-                // =====================================================
-                // ДВОПОЛЮСНИЙ LOW-PASS ФІЛЬТР (Теплий ламповий звук)
-                // =====================================================
-                lpf_out1 += lpf_cutoff * (raw_sample - lpf_out1);
-                lpf_out2 += lpf_cutoff * (lpf_out1 - lpf_out2);
-                float final_sample = lpf_out2;
-
-                SDL_QueueAudio(audio_device, &final_sample, sizeof(float));
-                dAudioSampleAccumulator = 0.0;
-                nAudioSampleCount = 0;
+            // Зберігаємо поточний стан у кільцевий буфер кожен другий кадр (30 FPS для знімків)
+            frame_counter++;
+            if (frame_counter % 2 == 0) {
+                CaptureState(nes, rewindBuffer, MAX_REWIND_STATES);
             }
         }
-        nes->ppu.frame_complete = false;
 
+        // Оновлюємо текстуру (працює і для звичайної гри, і для перемотування!)
         SDL_UpdateTexture(texture, nullptr, nes->ppu.sprScreen.data(), 256 * sizeof(uint32_t));
         SDL_RenderClear(renderer);
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
