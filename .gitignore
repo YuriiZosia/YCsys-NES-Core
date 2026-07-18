@@ -12,6 +12,8 @@
 combined.txt
 *.sav
 *.savestate
+*.py
+
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 

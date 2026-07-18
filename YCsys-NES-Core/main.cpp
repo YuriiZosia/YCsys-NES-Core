@@ -207,11 +207,25 @@ int main(int argc, char* argv[]) {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0) return -1;
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) return -1;
 
     SDL_Window* window = SDL_CreateWindow("YCsys NES Core", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 256 * current_scale, 240 * current_scale, SDL_WINDOW_SHOWN);
     SDL_Renderer* renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_Texture* texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 256, 240);
+
+    // =================================================================
+    // ПІДКЛЮЧЕННЯ ГЕЙМПАДА (XInput / DualSense / Switch)
+    // =================================================================
+    SDL_GameController* gameController = nullptr;
+    for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+        if (SDL_IsGameController(i)) {
+            gameController = SDL_GameControllerOpen(i);
+            if (gameController) {
+                std::cout << "[YCsys] Геймпад підключено: " << SDL_GameControllerName(gameController) << std::endl;
+                break; // Беремо перший знайдений геймпад
+            }
+        }
+    }
 
     PlayBootAnimation(renderer);
 
@@ -290,6 +304,33 @@ int main(int argc, char* argv[]) {
         nes->controller[0] |= state[SDL_SCANCODE_DOWN] ? 0x04 : 0x00;
         nes->controller[0] |= state[SDL_SCANCODE_LEFT] ? 0x02 : 0x00;
         nes->controller[0] |= state[SDL_SCANCODE_RIGHT] ? 0x01 : 0x00;
+
+        // =================================================================
+        // ЧИТАННЯ ГЕЙМПАДА (Додаємо до сигналів клавіатури)
+        // =================================================================
+        if (gameController) {
+            // Дозволяємо грати класичним хватом (Xbox X->B, Xbox A->A) або прямим
+            bool pad_A = SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_A) ||
+                SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_B);
+            bool pad_B = SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_X) ||
+                SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_Y);
+            bool pad_Sel = SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_BACK);
+            bool pad_Sta = SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_START);
+            bool pad_Up = SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_DPAD_UP);
+            bool pad_Dn = SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_DPAD_DOWN);
+            bool pad_Lf = SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_DPAD_LEFT);
+            bool pad_Rt = SDL_GameControllerGetButton(gameController, SDL_CONTROLLER_BUTTON_DPAD_RIGHT);
+
+            // Підмішуємо кнопки геймпада побітовим "АБО", щоб можна було грати і тим, і тим
+            nes->controller[0] |= pad_A ? 0x80 : 0x00;
+            nes->controller[0] |= pad_B ? 0x40 : 0x00;
+            nes->controller[0] |= pad_Sel ? 0x20 : 0x00;
+            nes->controller[0] |= pad_Sta ? 0x10 : 0x00;
+            nes->controller[0] |= pad_Up ? 0x08 : 0x00;
+            nes->controller[0] |= pad_Dn ? 0x04 : 0x00;
+            nes->controller[0] |= pad_Lf ? 0x02 : 0x00;
+            nes->controller[0] |= pad_Rt ? 0x01 : 0x00;
+        }
 
         // Керування збереженням на диск
         if (state[SDL_SCANCODE_F5]) {
@@ -395,7 +436,7 @@ int main(int argc, char* argv[]) {
         SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
     }
-
+	if (gameController) SDL_GameControllerClose(gameController);
     if (audio_device > 0) SDL_CloseAudioDevice(audio_device);
     SDL_DestroyTexture(texture);
     SDL_DestroyRenderer(renderer);
