@@ -110,24 +110,24 @@ void CPU6502::clock() {
         case 0xA5: ZP0(); LDA(); break;
         case 0xB5: ZPX(); LDA(); break;
         case 0xAD: ABS(); LDA(); break;
-        case 0xBD: ABX(); LDA(); break;
-        case 0xB9: ABY(); LDA(); break;
+        case 0xBD: cycles += ABX(); LDA(); break;
+        case 0xB9: cycles += ABY(); LDA(); break;
         case 0xA1: IZX(); LDA(); break;
-        case 0xB1: IZY(); LDA(); break;
+        case 0xB1: cycles += IZY(); LDA(); break;
 
             // LDX (Load X Register)
         case 0xA2: IMM(); LDX(); break;
         case 0xA6: ZP0(); LDX(); break;
         case 0xB6: ZPY(); LDX(); break;
         case 0xAE: ABS(); LDX(); break;
-        case 0xBE: ABY(); LDX(); break;
+        case 0xBE: cycles += ABY(); LDX(); break;
 
             // LDY (Load Y Register)
         case 0xA0: IMM(); LDY(); break;
         case 0xA4: ZP0(); LDY(); break;
         case 0xB4: ZPX(); LDY(); break;
         case 0xAC: ABS(); LDY(); break;
-        case 0xBC: ABX(); LDY(); break;
+        case 0xBC: cycles += ABX(); LDY(); break;
 
             // STA (Store Accumulator)
         case 0x85: ZP0(); STA(); break;
@@ -157,20 +157,20 @@ void CPU6502::clock() {
         case 0x65: ZP0(); ADC(); break;
         case 0x75: ZPX(); ADC(); break;
         case 0x6D: ABS(); ADC(); break;
-        case 0x7D: ABX(); ADC(); break;
-        case 0x79: ABY(); ADC(); break;
+        case 0x7D: cycles += ABX(); ADC(); break;
+        case 0x79: cycles += ABY(); ADC(); break;
         case 0x61: IZX(); ADC(); break;
-        case 0x71: IZY(); ADC(); break;
+        case 0x71: cycles += IZY(); ADC(); break;
 
             // SBC (Subtract with Carry)
         case 0xE9: IMM(); SBC(); break;
         case 0xE5: ZP0(); SBC(); break;
         case 0xF5: ZPX(); SBC(); break;
         case 0xED: ABS(); SBC(); break;
-        case 0xFD: ABX(); SBC(); break;
-        case 0xF9: ABY(); SBC(); break;
+        case 0xFD: cycles += ABX(); SBC(); break;
+        case 0xF9: cycles += ABY(); SBC(); break;
         case 0xE1: IZX(); SBC(); break;
-        case 0xF1: IZY(); SBC(); break;
+        case 0xF1: cycles += IZY(); SBC(); break;
 
             // =================================================================
             // --- ГРУПА ІНКРЕМЕНТУ / ДЕКРЕМЕНТУ (Inc / Dec) ---
@@ -205,30 +205,30 @@ void CPU6502::clock() {
         case 0x25: ZP0(); AND(); break;
         case 0x35: ZPX(); AND(); break;
         case 0x2D: ABS(); AND(); break;
-        case 0x3D: ABX(); AND(); break;
-        case 0x39: ABY(); AND(); break;
+        case 0x3D: cycles += ABX(); AND(); break;
+        case 0x39: cycles += ABY(); AND(); break;
         case 0x21: IZX(); AND(); break;
-        case 0x31: IZY(); AND(); break;
+        case 0x31: cycles += IZY(); AND(); break;
 
             // ORA (Logical Inclusive OR)
         case 0x09: IMM(); ORA(); break;
         case 0x05: ZP0(); ORA(); break;
         case 0x15: ZPX(); ORA(); break;
         case 0x0D: ABS(); ORA(); break;
-        case 0x1D: ABX(); ORA(); break;
-        case 0x19: ABY(); ORA(); break;
+        case 0x1D: cycles += ABX(); ORA(); break;
+        case 0x19: cycles += ABY(); ORA(); break;
         case 0x01: IZX(); ORA(); break;
-        case 0x11: IZY(); ORA(); break;
+        case 0x11: cycles += IZY(); ORA(); break;
 
             // EOR (Exclusive OR / XOR)
         case 0x49: IMM(); EOR(); break;
         case 0x45: ZP0(); EOR(); break;
         case 0x55: ZPX(); EOR(); break;
         case 0x4D: ABS(); EOR(); break;
-        case 0x5D: ABX(); EOR(); break;
-        case 0x59: ABY(); EOR(); break;
+        case 0x5D: cycles += ABX(); EOR(); break;
+        case 0x59: cycles += ABY(); EOR(); break;
         case 0x41: IZX(); EOR(); break;
-        case 0x51: IZY(); EOR(); break;
+        case 0x51: cycles += IZY(); EOR(); break;
 
             // BIT (Bit Test)
         case 0x24: ZP0(); BIT(); break;
@@ -337,10 +337,10 @@ void CPU6502::clock() {
         case 0xC5: ZP0(); CMP(); break;
         case 0xD5: ZPX(); CMP(); break;
         case 0xCD: ABS(); CMP(); break;
-        case 0xDD: ABX(); CMP(); break;
-        case 0xD9: ABY(); CMP(); break;
+        case 0xDD: cycles += ABX(); CMP(); break;
+        case 0xD9: cycles += ABY(); CMP(); break;
         case 0xC1: IZX(); CMP(); break;
-        case 0xD1: IZY(); CMP(); break;
+        case 0xD1: cycles += IZY(); CMP(); break;
 
             // CPX
         case 0xE0: IMM(); CPX(); break;
@@ -360,9 +360,9 @@ void CPU6502::clock() {
         case 0xA7: ZP0(); LAX(); break;
         case 0xB7: ZPY(); LAX(); break;
         case 0xAF: ABS(); LAX(); break;
-        case 0xBF: ABY(); LAX(); break;
+        case 0xBF: cycles += ABY(); LAX(); break;
         case 0xA3: IZX(); LAX(); break;
-        case 0xB3: IZY(); LAX(); break;
+        case 0xB3: cycles += IZY(); LAX(); break;
 
             // SAX
         case 0x87: ZP0(); SAX(); break;
