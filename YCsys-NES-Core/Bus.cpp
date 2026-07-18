@@ -161,18 +161,6 @@ uint8_t Bus::read(uint16_t addr, bool bReadOnly) {
             controller_state[1] |= 0x01;
         }
     }
-	// 6. Читаємо стан контролера 2
-    else if (addr == 0x4017) {
-        // Читаємо стан контролера 2
-        if (bStrobe) {
-            data = (controller_state[1] & 0x80) > 0 ? 1 : 0;
-        }
-        else {
-            data = (controller_state[1] & 0x80) > 0 ? 1 : 0;
-            controller_state[1] <<= 1;
-            controller_state[1] |= 0x01;
-        }
-    }
-
+	
     return data;
 }
