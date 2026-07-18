@@ -24,7 +24,7 @@
 #include <deque>  // Для кільцевого буфера "Машини часу"
 #include <vector>
 #include <array>
-
+#include <algorithm>
 
 #pragma warning(push)
 #pragma warning(disable: 26819)
@@ -42,11 +42,20 @@ const int SCALE = 3;
 
 // Структура для зберігання одного мікро-знімка системи
 struct GameState {
-    uint8_t cpu_a, cpu_x, cpu_y, cpu_stkp, cpu_status;
-    uint16_t cpu_pc;
-    std::array<uint8_t, 2048> cpuRam;
+    // Ініціалізуємо всі змінні нулями, щоб задовольнити суворі перевірки (type.6)
+    uint8_t cpu_a = 0;
+    uint8_t cpu_x = 0;
+    uint8_t cpu_y = 0;
+    uint8_t cpu_stkp = 0;
+    uint8_t cpu_status = 0;
+    uint16_t cpu_pc = 0;
+
+    std::array<uint8_t, 2048> cpuRam{};
     std::vector<uint8_t> prgRam;
-    std::array<uint32_t, 256 * 240> screen; // Візуальний кадр для плавного перемотування!
+
+    // ФІКС: Використовуємо динамічний вектор замість статичного масиву. 
+    // Це переносить 245 КБ даних у Heap і рятує стек від переповнення!
+    std::vector<uint32_t> screen;
 };
 
 static void CaptureState(Bus* nes, std::deque<GameState>& buffer, size_t max_size) {
@@ -63,7 +72,8 @@ static void CaptureState(Bus* nes, std::deque<GameState>& buffer, size_t max_siz
         state.prgRam = nes->cart->vPRGRAM;
     }
 
-    state.screen = nes->ppu.sprScreen; // Зберігаємо картинку
+    // Копіюємо дані масиву sprScreen у динамічний вектор
+    state.screen.assign(nes->ppu.sprScreen.begin(), nes->ppu.sprScreen.end());
 
     buffer.push_back(std::move(state));
 
@@ -86,9 +96,11 @@ static void RestoreState(Bus* nes, const GameState& state) {
         nes->cart->vPRGRAM = state.prgRam;
     }
 
-    nes->ppu.sprScreen = state.screen; // Миттєво повертаємо зображення на екран
+    // Безпечно повертаємо зображення з вектора назад у масив PPU
+    if (state.screen.size() == nes->ppu.sprScreen.size()) {
+        std::copy(state.screen.begin(), state.screen.end(), nes->ppu.sprScreen.begin());
+    }
 }
-
 
 // =================================================================
 // СИСТЕМА SAVE STATES (Швидке збереження на диск)
