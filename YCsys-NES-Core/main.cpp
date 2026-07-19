@@ -37,6 +37,9 @@
  // Глобальний масштаб екрана (динамічний)
 int current_scale = 3;
 
+// Перемінна debug_mode для дебагу максимально глобального рівня
+bool debug_mode = false;
+
 // =================================================================
 // СИСТЕМА МАШИНИ ЧАСУ (REWIND RING BUFFER)
 // =================================================================
@@ -346,9 +349,9 @@ int main(int argc, char* argv[]) {
             nes->controller[0] |= pad_Rt ? 0x01 : 0x00;
         }
 
-		// керування трейсером PC (F9)
+		// керування трейсером PC (F9) debug
         if (state[SDL_SCANCODE_F9]) {
-            if (!bF9_Pressed) {
+            if (!bF9_Pressed && debug_mode) {
                 std::cout << "\n[TRACE] === Знімок PC ===" << std::endl;
                 std::cout << "PC = $" << std::hex << std::uppercase << nes->cpu.pc << std::dec << std::endl;
                 std::cout << "Опкоди навколо: ";
@@ -461,28 +464,30 @@ int main(int argc, char* argv[]) {
                 }
                 nes->ppu.frame_complete = false;
 
-                // --- Трейсер: збираємо відвідані адреси PC ---
-                pcVisited.insert(nes->cpu.pc);
-                traceFrameCounter++;
+                // --- Трейсер: збираємо відвідані адреси PC debug---
+				if (debug_mode){
+                    pcVisited.insert(nes->cpu.pc);
+                    traceFrameCounter++;
 
-                if (traceFrameCounter >= 180) { // приблизно раз на 3 секунди при 60 fps
-                    std::cout << "[TRACE] За останні " << traceFrameCounter
-                        << " кадрів CPU відвідав " << pcVisited.size()
-                        << " різних адрес PC." << std::endl;
+                    if (traceFrameCounter >= 180) { // приблизно раз на 3 секунди при 60 fps
+                        std::cout << "[TRACE] За останні " << traceFrameCounter
+                            << " кадрів CPU відвідав " << pcVisited.size()
+                            << " різних адрес PC." << std::endl;
 
-                    std::cout << "[TRACE] NMI спрацювань з початку роботи: " << nes->ppu.nmiFireCount << std::endl;
+                        std::cout << "[TRACE] NMI спрацювань з початку роботи: " << nes->ppu.nmiFireCount << std::endl;
 
-                    if (pcVisited.size() < 15) {
-                        std::cout << "[TRACE] СХОЖЕ НА ЗАЦИКЛЕННЯ! Адреси: ";
-                        for (uint16_t addr : pcVisited) {
-                            std::cout << "$" << std::hex << std::uppercase << addr << " ";
+                        if (pcVisited.size() < 15) {
+                            std::cout << "[TRACE] СХОЖЕ НА ЗАЦИКЛЕННЯ! Адреси: ";
+                            for (uint16_t addr : pcVisited) {
+                                std::cout << "$" << std::hex << std::uppercase << addr << " ";
+                            }
+                            std::cout << std::dec << std::endl;
                         }
-                        std::cout << std::dec << std::endl;
-                    }
 
-                    pcVisited.clear();
-                    traceFrameCounter = 0;
-                }
+                        pcVisited.clear();
+                        traceFrameCounter = 0;
+                    }
+				}
 
                 frame_counter++;
                 if (frame_counter % 2 == 0) {

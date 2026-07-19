@@ -41,33 +41,6 @@ void Bus::clock() {
     // PPU - найшвидший компонент на платі. Він робить один крок КОЖЕН системний такт.
     ppu.clock();
 
-    // ОДНОРАЗОВИЙ МІКРО-ТРЕЙС МОМЕНТУ ЗАВИСАННЯ (для діагностики Bomberman)
-    static bool reachedFreezeLoop = false;
-    static bool armed = false;
-    static bool microTraceDone = false;
-
-    if (!reachedFreezeLoop && cpu.pc == 0xC290) {
-        reachedFreezeLoop = true; // Зловили момент, коли CPU вперше зайшов у підозрілий цикл
-    }
-
-    if (reachedFreezeLoop && !microTraceDone) {
-        if (!armed && ppu.scanline == 240 && ppu.cycle >= 335) {
-            armed = true; // Чекаємо саме наступного переходу у VBlank ПІСЛЯ зависання
-        }
-        if (armed) {
-            std::cout << "[MICRO] sysclk=" << nSystemClockCounter
-                << " scanline=" << ppu.scanline << " cycle=" << ppu.cycle
-                << " status=$" << std::hex << (int)ppu.status
-                << " nmi_occ=" << ppu.nmi_occurred
-                << " cpu.pc=$" << cpu.pc
-                << " cpu.cycles=" << std::dec << (int)cpu.cycles
-                << std::endl;
-            if (ppu.scanline == 241 && ppu.cycle >= 30) {
-                microTraceDone = true;
-            }
-        }
-    }
-
     // CPU працює в 3 рази повільніше. Він робить крок лише кожен третій системний такт.
     if (nSystemClockCounter % 3 == 0) {
 

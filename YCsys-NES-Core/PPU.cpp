@@ -320,12 +320,15 @@ void PPU::clock() {
 
     // --- ГЕНЕРАЦІЯ СИГНАЛУ NMI НА ПОЧАТКУ VBLANK ---
     if (scanline == 241 && cycle == 1) {
-        status |= 0x80; // Встановлюємо прапорець VBlank (біт 7 у $2002)
+        if (!bNMISuppressed) {
+            status |= 0x80; // Встановлюємо прапорець VBlank (біт 7 у $2002)
 
-        if (control & 0x80) { // Якщо NMI дозволено в PPUCTRL
-            nmi_occurred = true; // Викидаємо прапорець переривання на шину
-			nmiFireCount++; // Збільшуємо лічильник викликів NMI, для трейсування та налагодження
+            if (control & 0x80) { // Якщо NMI дозволено в PPUCTRL
+                nmi_occurred = true; // Викидаємо прапорець переривання на шину
+                nmiFireCount++; // Збільшуємо лічильник викликів NMI, для трейсування та налагодження
+            }
         }
+        bNMISuppressed = false; // Обов'язково скидаємо прапорець для наступного кадру
     }
 
     // Емуляція ходу променя екрану
@@ -420,19 +423,24 @@ uint8_t PPU::cpuRead(uint16_t addr, bool rdonly) {
     case 0x0001: // $2001 - PPUMASK (Тільки для запису)
         break;
     case 0x0002: // $2002 - PPUSTATUS
-        // ФІКС "VBLANK STEAL DEADLOCK": Зазираємо в майбутнє на 1 інструкцію!
-            // Якщо процесор читає статус за 11 тактів до VBlank (кінець 240-го рядка),
-            // ми віддаємо йому 0x80 завчасно, щоб скомпенсувати ранній fetch() у CPU.
+        // ФІКС NMI SUPPRESSION: Якщо гра читає статус за мить до VBlank,
+        // вона очікує, що переривання буде скасовано. Ми віддаємо їй 0x80
+        // і ставимо прапорець, щоб PPU не генерував NMI у цьому кадрі.
         if (scanline == 240 && cycle >= 330) {
-            status |= 0x80;
+            bNMISuppressed = true;
+            data = 0x80 | (ppu_data_buffer & 0x1F);
+            if (!rdonly) {
+                address_latch = 0;
+                nmi_occurred = false;
+            }
+            break;
         }
-        // Читаємо 3 старші біти реального статусу. Молодші 5 бітів фізично не підключені 
-        // на платі NES до цього регістра, тому там залишається "сміття" з буфера даних.
-        data = (status & 0xE0) | (ppu_data_buffer & 0x1F);
 
+        // Стандартна поведінка для всього іншого часу
+        data = (status & 0xE0) | (ppu_data_buffer & 0x1F);
         if (!rdonly) {
-            status &= ~0x80;   // Апаратна особливість: читання статусу скидає прапорець VBlank (7-й біт)
-            address_latch = 0; // Чищення статусу також повністю скидає адресний тригер $2006
+            status &= ~0x80;
+            address_latch = 0;
             nmi_occurred = false;
         }
         break;
