@@ -104,8 +104,8 @@
 - [x] APU (Pulse, Triangle, Noise).
 - [x] Low-Pass фільтрація звуку.
 - [x] Joypad (з обходом захисту Open Bus).
-- [ ] *DMC (Delta Modulation Channel) — У розробці.*
-- [ ] *Обробка аудіобуфера в окремий потік (multithreading) — У розробці.*
+- [x] DMC (Delta Modulation Channel).
+- [x] Обробка аудіобуфера в окремий потік (multithreading).
 
 ### 5. 🖥️ UX/UI та Додаткові Функції
 - [x] 🎮 Підтримка реальних геймпадів (Xbox, DualSense, Switch).

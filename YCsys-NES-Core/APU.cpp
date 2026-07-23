@@ -17,6 +17,7 @@
  */
 
 #include "APU.h"
+#include "Bus.h"
 
 APU::APU() {}
 APU::~APU() {}
@@ -113,6 +114,27 @@ void APU::cpuWrite(uint16_t addr, uint8_t data) {
         break;
 
         // ==========================================
+        // DMC (Delta Modulation Channel)
+        // ==========================================
+    case 0x4010:
+        dmc.irq = (data & 0x80) != 0;
+        dmc.loop = (data & 0x40) != 0;
+        dmc.tick_period = data & 0x0F; // Індекс частоти дискретизації
+        break;
+    case 0x4011:
+        // Пряме завантаження рівня виходу (7 біт)
+        dmc.output_level = data & 0x7F;
+        break;
+    case 0x4012:
+        // Стартова адреса семплу: $C000 + (data * 64)
+        dmc.sample_address = 0xC000 + (static_cast<uint16_t>(data) * 64);
+        break;
+    case 0x4013:
+        // Довжина семплу: (data * 16) + 1
+        dmc.sample_length = (static_cast<uint16_t>(data) * 16) + 1;
+        break;
+
+        // ==========================================
         // СТАТУС ТА СЕКВЕНСОР
         // ==========================================
     case 0x4015:
@@ -128,6 +150,21 @@ void APU::cpuWrite(uint16_t addr, uint8_t data) {
         // ФІКС: Повертаємо ШУМ на законне місце!
         noise.enabled = (data & 0x08) > 0;
         if (!noise.enabled) noise.length_counter = 0;
+        
+        dmc.enabled = (data & 0x10) > 0;
+        if (!dmc.enabled) {
+            dmc.current_length = 0;
+        }
+        else {
+            if (dmc.current_length == 0) {
+                dmc.current_address = dmc.sample_address;
+                dmc.current_length = dmc.sample_length;
+                // ФІКС: Одразу просимо перший семпл у шини!
+                if (pBus != nullptr) {
+                    dmc.fetch_sample(pBus);
+                }
+            }
+        }
         break;
 
     case 0x4017:
@@ -178,6 +215,7 @@ void APU::clock() {
         pulse1_sample = pulse1.clock();
         pulse2_sample = pulse2.clock();
         noise_sample = noise.clock();
+		dmc_sample = dmc.clock(pBus);
     }
 
     // 2. Секвенсор кадрів (керує оболонками та довжинами кожні ~7457 тактів)
@@ -205,11 +243,86 @@ void APU::clock() {
     clock_counter++;
 }
 
+// ---------------------------------------------------------
+// ЛОГІКА КАНАЛУ DMC (Delta Modulation Channel)
+// ---------------------------------------------------------
+void APU::DMC::fetch_sample(Bus* bus) {
+    if (!has_sample && current_length > 0) {
+        // Читаємо байт напряму з оперативної пам'яті гри (DMA)
+        sample_buffer = bus->read(current_address, true);
+        has_sample = true;
+
+        // Інкрементуємо адресу з обгортанням (за апаратним правилом 6502)
+        current_address++;
+        if (current_address == 0xFFFF) {
+            current_address = 0x8000;
+        }
+
+        current_length--;
+
+        // Якщо семпл закінчився
+        if (current_length == 0) {
+            if (loop) {
+                // Перезапускаємо семпл
+                current_address = sample_address;
+                current_length = sample_length;
+            }
+            else if (irq) {
+                // В майбутньому тут можна кидати bus->cpu.irq()
+            }
+        }
+    }
+}
+
+uint8_t APU::DMC::clock(Bus* bus) {
+    if (!enabled) return output_level;
+
+    if (tick_value > 0) {
+        tick_value--;
+    }
+
+    if (tick_value == 0) {
+        // Скидаємо таймер згідно з поточним індексом
+        tick_value = rate_table[tick_period & 0x0F];
+
+        // Якщо 8 біт закінчилися, починаємо новий цикл
+        if (bit_count == 0) {
+            bit_count = 8;
+            if (has_sample) {
+                silence = false;
+                shift_register = sample_buffer;
+                has_sample = false;
+                fetch_sample(bus); // Одразу просимо шину завантажити наступний байт
+            }
+            else {
+                silence = true;
+            }
+        }
+
+        // Міняємо рівень виходу залежно від біта
+        if (!silence) {
+            if (shift_register & 0x01) {
+                if (output_level <= 125) output_level += 2; // Збільшуємо гучність
+            }
+            else {
+                if (output_level >= 2) output_level -= 2;   // Зменшуємо гучність
+            }
+        }
+
+        // Зсуваємо регістр для наступного такту
+        shift_register >>= 1;
+        bit_count--;
+    }
+
+    return output_level;
+}
+
 double APU::GetOutputSample() const {
     // ФІКС 4B: Автентична апроксимація аудіо мікшера NES (Нелінійна)
     // Ці вагові коефіцієнти ідеально відтворюють баланс між басом, пульсом та ударними.
     double pulse_out = 0.00752 * (pulse1_sample + pulse2_sample);
-    double tnd_out = 0.00851 * triangle_sample + 0.00494 * noise_sample;
+    // ФІКС: Додано наближений коефіцієнт (0.00335) для каналу DMC
+    double tnd_out = 0.00851 * triangle_sample + 0.00494 * noise_sample + 0.00335 * dmc_sample;
 
     // Результат лежить у безпечних межах ~0.0 до 0.42
     double mixed = pulse_out + tnd_out;

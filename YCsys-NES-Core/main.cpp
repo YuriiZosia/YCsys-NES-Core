@@ -33,6 +33,8 @@
 #pragma warning(pop)            
 
 #include "Bus.h"
+#include <mutex>
+#include <queue>
 
  // Глобальний масштаб екрана (динамічний)
 int current_scale = 3;
@@ -133,6 +135,31 @@ static void LoadGameFromDisk(Bus* nes) {
         }
         in.close();
         std::cout << "[YCsys] State Loaded Successfully from Disk!" << std::endl;
+    }
+}
+
+// =================================================================
+// Потокобезпечний буфер для аудіо семплів
+// =================================================================
+std::queue<float> audio_queue;
+std::mutex audio_mutex;
+
+// Функція, яка автоматично викликається окремим аудіопотоком SDL
+static void AudioCallback(void* userdata, Uint8* stream, int len) {
+    float* fStream = (float*)stream;
+    int samplesToWrite = len / sizeof(float);
+
+    std::lock_guard<std::mutex> lock(audio_mutex);
+
+    for (int i = 0; i < samplesToWrite; i++) {
+        if (!audio_queue.empty()) {
+            fStream[i] = audio_queue.front();
+            audio_queue.pop();
+        }
+        else {
+            // Якщо CPU не встиг згенерувати звук, виводимо тишу (нуль)
+            fStream[i] = 0.0f;
+        }
     }
 }
 
@@ -269,7 +296,7 @@ int main(int argc, char* argv[]) {
     audio_spec.format = AUDIO_F32SYS;
     audio_spec.channels = 1;
     audio_spec.samples = 1024;
-    audio_spec.callback = nullptr;
+    audio_spec.callback = AudioCallback; // ЗМІНЕНО: Тепер SDL працює в окремому потоці
 
     SDL_AudioDeviceID audio_device = SDL_OpenAudioDevice(nullptr, 0, &audio_spec, nullptr, 0);
     if (audio_device > 0) SDL_PauseAudioDevice(audio_device, 0);
@@ -457,6 +484,11 @@ int main(int argc, char* argv[]) {
                         lpf_out2 += lpf_cutoff * (lpf_out1 - lpf_out2);
                         float final_sample = lpf_out2;
 
+                        //Заміни прямий вивід на запис у чергу.Замість SDL_QueueAudio безпечно кладемо семпл у чергу для аудіопотоку
+						{
+							std::lock_guard<std::mutex> lock(audio_mutex);
+							audio_queue.push(final_sample);
+						}
                         SDL_QueueAudio(audio_device, &final_sample, sizeof(float));
                         dAudioSampleAccumulator = 0.0;
                         nAudioSampleCount = 0;

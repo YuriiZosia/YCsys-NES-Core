@@ -25,6 +25,9 @@ Bus::Bus() : cpuRam{ 0 } {
 
     // Очищуємо оперативну пам'ять нулями
     for (auto& i : cpuRam) i = 0x00;
+
+	// Підключаємо APU до цієї шини
+	apu.connectBus(this);
 }
 
 Bus::~Bus() {}

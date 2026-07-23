@@ -19,6 +19,8 @@
 #pragma once
 #include <cstdint>
 
+class Bus; // Forward declaration of Bus class
+
 class APU {
 public:
     APU();
@@ -28,9 +30,11 @@ public:
     uint8_t cpuRead(uint16_t addr);
     void clock();
     double GetOutputSample() const;
+	void connectBus(Bus* bus) { pBus = bus; }
 
 private:
     uint32_t clock_counter = 0; // Системний лічильник тактів APU
+    Bus* pBus = nullptr; // Вказівник на об'єкт Bus
 
     // ==========================================
     // СЕКВЕНСОР КАДРІВ ТА ТАБЛИЦІ
@@ -228,6 +232,38 @@ private:
         }
     };
 
+    struct DMC {
+        bool enabled = false;
+        uint8_t output_level = 0; // Пряме управління гучністю (0-127)
+        uint16_t sample_address = 0x0000;
+        uint16_t sample_length = 0x0000;
+
+        uint16_t current_address = 0x0000;
+        uint16_t current_length = 0x0000;
+        uint8_t shift_register = 0x00;
+        uint8_t bit_count = 0;
+        uint8_t tick_period = 0;
+        uint16_t tick_value = 0;
+        bool loop = false;
+        bool irq = false;
+
+        // Нові змінні для буфера семплу
+        uint8_t sample_buffer = 0x00;
+        bool has_sample = false;
+        bool silence = true;
+
+        // Офіційна NTSC таблиця частот (в системних тактах)
+        static constexpr uint16_t rate_table[16] = {
+            428, 380, 340, 320, 286, 254, 226, 214, 190, 160, 142, 128, 106, 84, 72, 54
+        };
+
+        void fetch_sample(Bus* bus);
+        uint8_t clock(Bus* bus);
+    };
+
+    DMC dmc; // Оголошуємо об'єкт каналу
+    uint8_t dmc_sample = 0; // Змінна для мікшера
+
     Pulse pulse1;
     Pulse pulse2;
     Triangle triangle;
@@ -237,7 +273,6 @@ private:
     uint8_t pulse2_sample = 0;
     uint8_t triangle_sample = 0;
     uint8_t noise_sample = 0;
-
     // Внутрішні методи секвенсора
     void clock_quarter_frame();
     void clock_half_frame();
